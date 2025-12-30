@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Avalon Host (Simple)</title>
+  <title>Avalon</title>
   <style>
     body { font-family: -apple-system, system-ui, Arial; margin: 0; background: #f6f7fb; color: #111; }
     .wrap { max-width: 720px; margin: 0 auto; padding: 16px; }
@@ -27,11 +27,13 @@
     .muted { color:#666; font-size: 13px; }
     .center { text-align:center; }
     .big { font-size: 22px; font-weight: 700; }
-    .questGrid { display:grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+    .questGrid { display:grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
     .questBox { padding: 10px; border-radius: 14px; background:#f1f3f9; text-align:center; }
     .good { background:#e8f5e9; }
     .evil { background:#ffebee; }
     .hidden { display:none; }
+    .teamPicker { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px; margin-top:6px; }
+    #voteSummary, #missionPrompt { font-weight: 600; }
     .checkbox { display:flex; align-items:center; gap: 8px; margin: 6px 0; }
     .checkbox input { width: 18px; height: 18px; }
     .divider { height:1px; background:#eceef6; margin: 14px 0; }
@@ -46,7 +48,7 @@
 <body>
 <div class="wrap">
   <div class="topBar">
-    <h1>Avalon Host (Simple)</h1>
+    <h1>Avalon</h1>
     <button class="linkbtn" id="btnResetAll" title="Reset everything">Reset</button>
   </div>
   <div class="muted">Pass-the-phone role reveal + 5 quest tracker.</div>
@@ -109,9 +111,31 @@
     <div class="questGrid" id="questGrid"></div>
 
     <div class="divider"></div>
-    <div class="row">
-      <button id="btnQuestSuccess" class="secondary" style="flex:1;">Mark current quest: Success</button>
-      <button id="btnQuestFail" class="secondary danger" style="flex:1;">Mark current quest: Fail</button>
+    <div id="proposalArea">
+      <div id="proposalStatus" class="muted"></div>
+      <div id="teamSizeText" class="muted"></div>
+      <div id="teamPicker" class="teamPicker"></div>
+      <div class="muted" id="teamPickHint" style="margin-top:4px;"></div>
+      <div class="row" style="margin-top:10px;">
+        <button id="btnSubmitProposal" class="secondary" style="flex:1;">Submit proposal</button>
+      </div>
+    </div>
+
+    <div id="voteArea" class="hidden" style="margin-top:12px;">
+      <div id="voteSummary"></div>
+      <div class="row" style="margin-top:8px;">
+        <button id="btnVoteApprove" class="secondary" style="flex:1;">Proposal approved</button>
+        <button id="btnVoteReject" class="secondary danger" style="flex:1;">Proposal rejected</button>
+      </div>
+    </div>
+
+    <div id="missionArea" class="hidden" style="margin-top:12px;">
+      <div id="missionPrompt"></div>
+      <div class="muted" id="missionFailRule" style="margin-top:4px;"></div>
+      <div class="row" style="margin-top:8px;">
+        <button id="btnCardPass" class="secondary" style="flex:1;">PASS</button>
+        <button id="btnCardFail" class="danger" style="flex:1;">FAIL</button>
+      </div>
     </div>
 
     <div class="divider"></div>
@@ -195,7 +219,12 @@
     goodScore: 0,
     evilScore: 0,
     ended: false,
-    assassinResolved: false
+    assassinResolved: false,
+    proposalAttempt: 1,
+    currentProposal: [],
+    missionStepIndex: 0,
+    missionFailCount: 0,
+    questPhase: 'proposal' // 'proposal' | 'vote' | 'mission'
   };
 
   // ---------- Elements ----------
@@ -220,8 +249,21 @@
   const btnNextPlayer = document.getElementById('btnNextPlayer');
 
   const questGrid = document.getElementById('questGrid');
-  const btnQuestSuccess = document.getElementById('btnQuestSuccess');
-  const btnQuestFail = document.getElementById('btnQuestFail');
+  const proposalArea = document.getElementById('proposalArea');
+  const voteArea = document.getElementById('voteArea');
+  const missionArea = document.getElementById('missionArea');
+  const proposalStatus = document.getElementById('proposalStatus');
+  const teamSizeText = document.getElementById('teamSizeText');
+  const teamPicker = document.getElementById('teamPicker');
+  const teamPickHint = document.getElementById('teamPickHint');
+  const voteSummary = document.getElementById('voteSummary');
+  const missionPrompt = document.getElementById('missionPrompt');
+  const missionFailRule = document.getElementById('missionFailRule');
+  const btnSubmitProposal = document.getElementById('btnSubmitProposal');
+  const btnVoteApprove = document.getElementById('btnVoteApprove');
+  const btnVoteReject = document.getElementById('btnVoteReject');
+  const btnCardPass = document.getElementById('btnCardPass');
+  const btnCardFail = document.getElementById('btnCardFail');
   const statusText = document.getElementById('statusText');
   const scoreText = document.getElementById('scoreText');
 
@@ -439,6 +481,179 @@
     return `You are Good. Try to pass quests and identify Evil.`;
   }
 
+  function currentQuestTeamSize() {
+    const sizes = teamSizes[state.nPlayers] || [2,3,3,4,4];
+    return sizes[state.currentQuest] || sizes[sizes.length - 1];
+  }
+
+  function updateQuestStatusText(customText) {
+    if (customText) {
+      statusText.textContent = customText;
+      return;
+    }
+    if (state.ended) return;
+    let detail = '';
+    if (state.questPhase === 'proposal') detail = `Proposal ${state.proposalAttempt} of 5`;
+    if (state.questPhase === 'vote') detail = `Proposal ${state.proposalAttempt} — awaiting vote`;
+    if (state.questPhase === 'mission') detail = `Mission in progress`;
+    statusText.textContent = `Quest ${state.currentQuest+1} — ${detail || 'not decided'}`;
+  }
+
+  function renderTeamPicker() {
+    const teamSize = currentQuestTeamSize();
+    teamPicker.innerHTML = '';
+    state.players.forEach((p, idx) => {
+      const label = document.createElement('label');
+      label.className = 'checkbox';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = String(idx);
+      cb.checked = state.currentProposal.includes(idx);
+      cb.addEventListener('change', () => {
+        const selected = getSelectedProposalTeam();
+        teamPickHint.textContent = `Selected ${selected.length}/${teamSize} players`;
+      });
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(p));
+      teamPicker.appendChild(label);
+    });
+    const selected = getSelectedProposalTeam();
+    teamPickHint.textContent = `Selected ${selected.length}/${teamSize} players`;
+  }
+
+  function getSelectedProposalTeam() {
+    const inputs = teamPicker.querySelectorAll('input[type="checkbox"]');
+    const selected = [];
+    inputs.forEach(input => {
+      if (input.checked) selected.push(Number(input.value));
+    });
+    return selected;
+  }
+
+  function renderProposalState() {
+    if (!state.started || state.players.length === 0 || state.ended) {
+      proposalArea.classList.add('hidden');
+      voteArea.classList.add('hidden');
+      missionArea.classList.add('hidden');
+      return;
+    }
+
+    const teamSize = currentQuestTeamSize();
+    proposalStatus.textContent = `Quest ${state.currentQuest+1}: Proposal ${state.proposalAttempt} of 5`;
+    teamSizeText.textContent = `Select ${teamSize} players for this quest.`;
+
+    const questResolved = state.questResults[state.currentQuest] !== null;
+    const showProposal = state.questPhase === 'proposal' && !questResolved;
+    const showVote = state.questPhase === 'vote' && !questResolved;
+    const showMission = state.questPhase === 'mission' && !questResolved;
+
+    if (showProposal) {
+      proposalArea.classList.remove('hidden');
+      renderTeamPicker();
+    } else {
+      proposalArea.classList.add('hidden');
+    }
+
+    if (showVote) {
+      voteArea.classList.remove('hidden');
+      const names = state.currentProposal.map(i => state.players[i]);
+      voteSummary.innerHTML = `<div><b>Proposal ${state.proposalAttempt}</b> for Quest ${state.currentQuest+1}</div><div>${names.join(', ')}</div>`;
+    } else {
+      voteArea.classList.add('hidden');
+    }
+
+    if (showMission) {
+      missionArea.classList.remove('hidden');
+      renderMissionStep();
+    } else {
+      missionArea.classList.add('hidden');
+    }
+
+    updateQuestStatusText();
+  }
+
+  function resetQuestFlowForCurrentQuest() {
+    state.proposalAttempt = 1;
+    state.currentProposal = [];
+    state.missionStepIndex = 0;
+    state.missionFailCount = 0;
+    state.questPhase = 'proposal';
+    renderProposalState();
+  }
+
+  function handleSubmitProposal() {
+    if (state.ended || state.questPhase !== 'proposal') return;
+    const team = getSelectedProposalTeam();
+    const needed = currentQuestTeamSize();
+    if (team.length !== needed) {
+      alert(`Select exactly ${needed} players for this quest.`);
+      return;
+    }
+    state.currentProposal = team;
+    state.questPhase = 'vote';
+    renderProposalState();
+  }
+
+  function handleVoteResult(approved) {
+    if (state.ended || state.questPhase !== 'vote') return;
+    if (!approved) {
+      state.proposalAttempt += 1;
+      if (state.proposalAttempt > 5) {
+        resolveQuestResult(false, `Quest ${state.currentQuest+1} failed: 5 proposals rejected.`);
+        return;
+      }
+      state.currentProposal = [];
+      state.questPhase = 'proposal';
+      renderProposalState();
+      return;
+    }
+    state.questPhase = 'mission';
+    state.missionStepIndex = 0;
+    state.missionFailCount = 0;
+    renderProposalState();
+  }
+
+  function renderMissionStep() {
+    if (state.ended || state.questPhase !== 'mission') return;
+    const team = state.currentProposal;
+    const idx = state.missionStepIndex;
+    const needs2 = questNeedsTwoFails(state.nPlayers, state.currentQuest);
+    missionFailRule.textContent = needs2 ? 'Quest fails only if 2 FAIL cards are played.' : 'Quest fails if any FAIL card is played.';
+    if (idx >= team.length) return;
+    const playerName = state.players[team[idx]];
+    missionPrompt.innerHTML = `Hand phone to ${playerName}<br><br>(team member ${idx+1} of ${team.length}).<br><br>Choose PASS or FAIL secretly.`;
+  }
+
+  function handleMissionCard(isPass) {
+    if (state.ended || state.questPhase !== 'mission') return;
+    if (!isPass) state.missionFailCount += 1;
+    state.missionStepIndex += 1;
+    if (state.missionStepIndex >= state.currentProposal.length) {
+      const needs2 = questNeedsTwoFails(state.nPlayers, state.currentQuest);
+      const success = needs2 ? state.missionFailCount < 2 : state.missionFailCount === 0;
+      resolveQuestResult(success);
+      return;
+    }
+    renderMissionStep();
+  }
+
+  function resolveQuestResult(resultSuccess, reasonText) {
+    state.questResults[state.currentQuest] = resultSuccess;
+    let next = state.questResults.findIndex(x => x === null);
+    if (next === -1) next = 4;
+    const finishedQuest = state.currentQuest;
+    state.currentQuest = next;
+    renderQuestGrid();
+    updateScoreAndStatus();
+    if (!state.ended) {
+      if (reasonText) updateQuestStatusText(reasonText);
+      resetQuestFlowForCurrentQuest();
+    } else if (reasonText) {
+      statusText.textContent = reasonText;
+    }
+    renderProposalState();
+  }
+
   function renderQuestGrid() {
     questGrid.innerHTML = '';
     const n = state.nPlayers;
@@ -479,9 +694,8 @@
 
     scoreText.textContent = `Good ${state.goodScore} • Evil ${state.evilScore}`;
 
-    const q = state.currentQuest;
     if (!state.ended) {
-      statusText.textContent = `Quest ${q+1} — not decided`;
+      updateQuestStatusText();
     }
 
     // End conditions
@@ -515,8 +729,11 @@
   }
 
   function disableQuestButtons(disabled) {
-    btnQuestSuccess.disabled = disabled;
-    btnQuestFail.disabled = disabled;
+    [btnSubmitProposal, btnVoteApprove, btnVoteReject, btnCardPass, btnCardFail].forEach(btn => {
+      btn.disabled = disabled;
+    });
+    const inputs = teamPicker.querySelectorAll('input[type="checkbox"]');
+    inputs.forEach(cb => cb.disabled = disabled);
   }
 
   function setHostControlsVisibility() {
@@ -553,6 +770,11 @@
     state.evilScore = 0;
     state.ended = false;
     state.assassinResolved = false;
+    state.proposalAttempt = 1;
+    state.currentProposal = [];
+    state.missionStepIndex = 0;
+    state.missionFailCount = 0;
+    state.questPhase = 'proposal';
 
     setupCard.classList.remove('hidden');
     revealCard.classList.add('hidden');
@@ -578,6 +800,7 @@
     setHostControlsVisibility();
 
     updateSetupHint();
+    renderProposalState();
   }
 
   function startGame() {
@@ -594,6 +817,7 @@
     state.players = parsePlayers(n);
     state.roles = buildRoles(n, flags);
     state.started = true;
+    resetQuestFlowForCurrentQuest();
     setHostControlsVisibility();
 
     // Reveal UI
@@ -643,27 +867,9 @@
       revealCard.classList.add('hidden');
       gameCard.classList.remove('hidden');
 
+      resetQuestFlowForCurrentQuest();
       renderQuestGrid();
       updateScoreAndStatus();
-    }
-  }
-
-  function markQuest(resultSuccess) {
-    if (state.ended) return;
-    const q = state.currentQuest;
-    if (state.questResults[q] !== null) return;
-
-    state.questResults[q] = resultSuccess;
-    // move currentQuest to next undecided
-    let next = state.questResults.findIndex(x => x === null);
-    if (next === -1) next = 4;
-    state.currentQuest = next;
-
-    renderQuestGrid();
-    updateScoreAndStatus();
-
-    if (!state.ended) {
-      statusText.textContent = `Quest ${state.currentQuest+1} — not decided`;
     }
   }
 
@@ -720,8 +926,11 @@
   btnHideRole.addEventListener('click', hideRole);
   btnNextPlayer.addEventListener('click', nextPlayer);
 
-  btnQuestSuccess.addEventListener('click', () => markQuest(true));
-  btnQuestFail.addEventListener('click', () => markQuest(false));
+  btnSubmitProposal.addEventListener('click', handleSubmitProposal);
+  btnVoteApprove.addEventListener('click', () => handleVoteResult(true));
+  btnVoteReject.addEventListener('click', () => handleVoteResult(false));
+  btnCardPass.addEventListener('click', () => handleMissionCard(true));
+  btnCardFail.addEventListener('click', () => handleMissionCard(false));
 
   btnAssassinConfirm.addEventListener('click', resolveAssassination);
 
