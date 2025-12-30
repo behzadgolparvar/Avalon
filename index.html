@@ -138,9 +138,9 @@
       </div>
     </div>
 
-    <div class="divider"></div>
-    <button id="btnShowAllRoles" class="secondary">Show all roles (host view)</button>
-    <div id="allRoles" class="hidden" style="margin-top:10px;"></div>
+      <div class="divider"></div>
+      <button id="btnShowAllRoles" class="secondary hidden">Show all roles (host view)</button>
+      <div id="allRoles" class="hidden" style="margin-top:10px;"></div>
   </div>
 </div>
 
@@ -244,8 +244,56 @@
   const roleOberon = document.getElementById('roleOberon');
   const roleMordred = document.getElementById('roleMordred');
 
+  function autoSelectRecommendedRoles(n) {
+    // Recommend Morgana automatically, but leave room for user overrides. Default for 6-player games: neither Percival nor Morgana pre-selected.
+    const percivalManual = rolePercival.dataset.manual === 'true';
+    const morganaManual = roleMorgana.dataset.manual === 'true';
+    const merlinManual = roleMerlin.dataset.manual === 'true';
+    const assassinManual = roleAssassin.dataset.manual === 'true';
+    const oberonManual = roleOberon.dataset.manual === 'true';
+    const mordredManual = roleMordred.dataset.manual === 'true';
+
+    // For 10 players, default all special roles on unless manually overridden.
+    if (n === 10) {
+      if (!merlinManual) roleMerlin.checked = true;
+      if (!percivalManual) rolePercival.checked = true;
+      if (!assassinManual) roleAssassin.checked = true;
+      if (!morganaManual) roleMorgana.checked = true;
+      if (!oberonManual) roleOberon.checked = true;
+      if (!mordredManual) roleMordred.checked = true;
+    }
+
+    if (n === 6 && !percivalManual && !morganaManual) {
+      rolePercival.checked = false;
+      roleMorgana.checked = false;
+    }
+
+    const recommendMorgana = (n >= 7) || (n === 6 && rolePercival.checked);
+    if (!morganaManual && recommendMorgana) {
+      roleMorgana.checked = true;
+    }
+    const recommendMordred = (n >= 7);
+    if (!mordredManual && recommendMordred) {
+      roleMordred.checked = true;
+    }
+
+    // Keep Percival and Morgana paired whenever either is selected.
+    if (rolePercival.checked && !roleMorgana.checked) roleMorgana.checked = true;
+    if (roleMorgana.checked && !rolePercival.checked) rolePercival.checked = true;
+  }
+
+  function enforceOberonLimit(n) {
+    const allowed = n >= 10;
+    roleOberon.disabled = !allowed;
+    if (!allowed && roleOberon.checked) {
+      roleOberon.checked = false;
+    }
+  }
+
   function updateSetupHint() {
     const n = clampPlayers(Number(numPlayersEl.value));
+    autoSelectRecommendedRoles(n);
+    enforceOberonLimit(n);
     const evilN = evilCountFor(n);
 
     const selected = getSelectedRoleFlags();
@@ -323,9 +371,9 @@
     // Build good roles
     const good = [];
     if (flags.merlin) good.push(makeRole('Merlin', 'Good', 'You know most Evil players (except Mordred). Be subtle.'));
-    if (flags.percival) good.push(makeRole('Percival', 'Good', 'You know who might be Merlin (Merlin/Morgana). Protect Merlin.'));
+    if (flags.percival) good.push(makeRole('Percival', 'Good', 'You see two players below: one is Merlin, and the other is Morgana (if Morgana is in the game). \nFigure out which is Merlin and protect him/her so the Assassin cannot identify him/her.'));
     while (good.length < (n - evilN)) {
-      good.push(makeRole('Loyal Servant of Arthur', 'Good', 'You are Good.'));
+      good.push(makeRole('Loyal Citizen', 'Good', 'You are Good.'));
     }
 
     const all = evil.concat(good);
@@ -348,6 +396,8 @@
 
     const evilNames = evilIdxs.map(i => state.players[i]);
     const evilRoles = evilIdxs.map(i => state.roles[i].name);
+    const oberonInGame = state.roles.some(r => r.name === 'Oberon');
+    const mordredInGame = state.roles.some(r => r.name === 'Mordred');
 
     // Helper: "known evil to evil (except Oberon)".
     function evilKnownToEvil(i) {
@@ -358,7 +408,10 @@
     // Merlin sees evil except Mordred
     if (me.name === 'Merlin') {
       const seen = evilIdxs.filter(i => state.roles[i].name !== 'Mordred').map(i => state.players[i]);
-      return `You see (as Evil): ${seen.length ? seen.join(', ') : 'Nobody'}.\n(You do NOT see Mordred.)`;
+      const mordredNote = mordredInGame
+        ? 'There is a Mordred in this game and you do NOT know him/her.'
+        : 'There is NOT any Mordred in this game.';
+      return `You know Evils:\n ${seen.length ? seen.join('\n') : 'Nobody'}\n\n${mordredNote}`;
     }
 
     // Percival sees Merlin + Morgana as candidates
@@ -367,7 +420,7 @@
       state.roles.forEach((r, i) => {
         if (r.name === 'Merlin' || r.name === 'Morgana') candidates.push(state.players[i]);
       });
-      return `Possible Merlin: ${candidates.length ? candidates.join(' or ') : 'None (Merlin/Morgana not in game?)'}.`;
+      return `Possible Merlin/Morgana:\n ${candidates.length ? candidates.join('\nOR\n ') : 'None (Merlin/Morgana not in game?)'}`;
     }
 
     // Evil (except Oberon) sees other evil (except Oberon)
@@ -378,8 +431,9 @@
       const knownEvil = evilIdxs
         .filter(i => i !== playerIndex)
         .filter(i => evilKnownToEvil(i))
-        .map(i => `${state.players[i]} (${state.roles[i].name})`);
-      return `Other Evil (known to you): ${knownEvil.length ? knownEvil.join(', ') : 'None'}.`;
+        .map(i => state.players[i]);
+      const oberonNote = (state.nPlayers >= 10 && oberonInGame) ? '\nNote: Oberon is in this game; you do NOT know him/her.' : '';
+      return `Other Evils known to you:\n ${knownEvil.length ? knownEvil.join('\n') : 'None'}\n${oberonNote}`;
     }
 
     return `You are Good. Try to pass quests and identify Evil.`;
@@ -457,11 +511,24 @@
       assassinArea.classList.add('hidden');
       disableQuestButtons(true);
     }
+    setHostControlsVisibility();
   }
 
   function disableQuestButtons(disabled) {
     btnQuestSuccess.disabled = disabled;
     btnQuestFail.disabled = disabled;
+  }
+
+  function setHostControlsVisibility() {
+    const assassinInGame = state.roles.some(r => r.name === 'Assassin');
+    const assassinPhaseActive = assassinInGame && state.goodScore >= 3 && !state.assassinResolved;
+    if (state.ended && !assassinPhaseActive) {
+      btnShowAllRoles.classList.remove('hidden');
+    } else {
+      btnShowAllRoles.classList.add('hidden');
+      allRoles.classList.add('hidden');
+      allRoles.innerHTML = '';
+    }
   }
 
   function populateAssassinPick() {
@@ -496,12 +563,19 @@
     btnHideRole.classList.add('hidden');
     btnNextPlayer.disabled = true;
 
+    delete roleMerlin.dataset.manual;
+    delete rolePercival.dataset.manual;
+    delete roleMorgana.dataset.manual;
+    delete roleAssassin.dataset.manual;
+    delete roleOberon.dataset.manual;
+    delete roleMordred.dataset.manual;
     allRoles.classList.add('hidden');
     allRoles.innerHTML = '';
 
     endgameArea.classList.add('hidden');
     assassinArea.classList.add('hidden');
     disableQuestButtons(false);
+    setHostControlsVisibility();
 
     updateSetupHint();
   }
@@ -520,6 +594,7 @@
     state.players = parsePlayers(n);
     state.roles = buildRoles(n, flags);
     state.started = true;
+    setHostControlsVisibility();
 
     // Reveal UI
     setupCard.classList.add('hidden');
@@ -608,9 +683,11 @@
       endgameSub.textContent = `${state.players[pickIdx]} was ${pickedRole.name}.`;
     }
     assassinArea.classList.add('hidden');
+    setHostControlsVisibility();
   }
 
   function toggleAllRoles() {
+    if (!state.ended) return; // Host view only after game ends
     if (allRoles.classList.contains('hidden')) {
       allRoles.classList.remove('hidden');
       const lines = state.players.map((p, i) => {
@@ -626,7 +703,15 @@
 
   // ---------- Events ----------
   numPlayersEl.addEventListener('input', updateSetupHint);
-  [roleMerlin, rolePercival, roleAssassin, roleMorgana, roleOberon, roleMordred].forEach(el => el.addEventListener('change', updateSetupHint));
+  [roleMerlin, rolePercival, roleAssassin, roleMorgana, roleOberon, roleMordred].forEach(el => el.addEventListener('change', () => {
+    el.dataset.manual = 'true';
+    if (el === rolePercival || el === roleMorgana) {
+      const paired = el === rolePercival ? roleMorgana : rolePercival;
+      paired.dataset.manual = 'true';
+      paired.checked = el.checked;
+    }
+    updateSetupHint();
+  }));
 
   btnStart.addEventListener('click', startGame);
   btnResetAll.addEventListener('click', resetAll);
