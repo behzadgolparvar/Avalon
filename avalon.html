@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Avalon Host (Simple)</title>
+  <style>
+    body { font-family: -apple-system, system-ui, Arial; margin: 0; background: #f6f7fb; color: #111; }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 16px; }
+    .card { background: #fff; border-radius: 16px; padding: 16px; box-shadow: 0 6px 22px rgba(0,0,0,.08); margin: 12px 0; }
+    h1 { font-size: 20px; margin: 8px 0 2px; }
+    h2 { font-size: 16px; margin: 0 0 10px; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    label { font-size: 13px; color: #333; display:block; margin: 8px 0 4px; }
+    input[type="number"], input[type="text"], select {
+      width: 100%; padding: 10px 12px; border: 1px solid #d6d8e1; border-radius: 12px; font-size: 16px;
+      background: #fff;
+    }
+    button {
+      border: 0; padding: 12px 14px; border-radius: 14px; font-size: 16px; cursor: pointer;
+      background: #111; color: #fff;
+    }
+    button.secondary { background: #e9ebf3; color: #111; }
+    button.danger { background: #c62828; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .pill { display:inline-block; padding: 6px 10px; border-radius: 999px; background:#eef1ff; margin: 6px 6px 0 0; font-size: 13px; }
+    .muted { color:#666; font-size: 13px; }
+    .center { text-align:center; }
+    .big { font-size: 22px; font-weight: 700; }
+    .questGrid { display:grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+    .questBox { padding: 10px; border-radius: 14px; background:#f1f3f9; text-align:center; }
+    .good { background:#e8f5e9; }
+    .evil { background:#ffebee; }
+    .hidden { display:none; }
+    .checkbox { display:flex; align-items:center; gap: 8px; margin: 6px 0; }
+    .checkbox input { width: 18px; height: 18px; }
+    .divider { height:1px; background:#eceef6; margin: 14px 0; }
+    .roleCard { border-radius: 18px; padding: 18px; background:#111; color:#fff; }
+    .roleName { font-size: 26px; font-weight: 800; margin: 4px 0 8px; }
+    .roleTeam { font-size: 14px; opacity:.9; margin-bottom: 10px; }
+    .roleInfo { background: rgba(255,255,255,.08); padding: 12px; border-radius: 14px; font-size: 14px; line-height:1.35; }
+    .topBar { display:flex; justify-content:space-between; align-items:center; gap: 10px; }
+    .linkbtn { background: transparent; color:#111; padding: 0; text-decoration: underline; font-size: 14px; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topBar">
+    <h1>Avalon Host (Simple)</h1>
+    <button class="linkbtn" id="btnResetAll" title="Reset everything">Reset</button>
+  </div>
+  <div class="muted">Pass-the-phone role reveal + 5 quest tracker.</div>
+
+  <!-- SETUP -->
+  <div class="card" id="setupCard">
+    <h2>1) Setup</h2>
+    <div class="row">
+      <div style="flex:1; min-width: 160px;">
+        <label>Number of players (5–10)</label>
+        <input id="numPlayers" type="number" min="5" max="10" value="7" />
+      </div>
+      <div style="flex:2; min-width: 240px;">
+        <label>Player names (optional, comma separated)</label>
+        <input id="playerNames" type="text" placeholder="Alex, Sam, ... (or leave blank)" />
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div>
+      <div class="muted">Roles (defaults are common). “Evil count” auto-scales by player count.</div>
+
+      <div class="checkbox"><input id="roleMerlin" type="checkbox" checked><label for="roleMerlin">Merlin (Good)</label></div>
+      <div class="checkbox"><input id="rolePercival" type="checkbox" checked><label for="rolePercival">Percival (Good)</label></div>
+
+      <div class="checkbox"><input id="roleAssassin" type="checkbox" checked><label for="roleAssassin">Assassin (Evil)</label></div>
+      <div class="checkbox"><input id="roleMorgana" type="checkbox"><label for="roleMorgana">Morgana (Evil)</label></div>
+      <div class="checkbox"><input id="roleOberon" type="checkbox"><label for="roleOberon">Oberon (Evil, hidden from evil)</label></div>
+
+      <div class="checkbox"><input id="roleMordred" type="checkbox"><label for="roleMordred">Mordred (Evil, hidden from Merlin)</label></div>
+
+      <div class="divider"></div>
+      <button id="btnStart">Start game</button>
+      <div class="muted" id="setupHint" style="margin-top:10px;"></div>
+    </div>
+  </div>
+
+  <!-- ROLE REVEAL -->
+  <div class="card hidden" id="revealCard">
+    <h2>2) Role reveal (pass the phone)</h2>
+    <div class="center muted" id="revealStep"></div>
+
+    <div class="card roleCard hidden" id="roleDisplay">
+      <div class="roleName" id="roleName"></div>
+      <div class="roleTeam" id="roleTeam"></div>
+      <div class="roleInfo" id="roleInfo"></div>
+    </div>
+
+    <div class="center" style="margin-top:12px;">
+      <button id="btnShowRole" class="secondary">Show role</button>
+      <button id="btnHideRole" class="secondary hidden">Hide</button>
+      <button id="btnNextPlayer" disabled>Next player</button>
+    </div>
+  </div>
+
+  <!-- GAME TRACKER -->
+  <div class="card hidden" id="gameCard">
+    <h2>3) Quest tracker</h2>
+
+    <div class="questGrid" id="questGrid"></div>
+
+    <div class="divider"></div>
+    <div class="row">
+      <button id="btnQuestSuccess" class="secondary" style="flex:1;">Mark current quest: Success</button>
+      <button id="btnQuestFail" class="secondary danger" style="flex:1;">Mark current quest: Fail</button>
+    </div>
+
+    <div class="divider"></div>
+    <div class="center">
+      <div class="big" id="statusText">Quest 1 — not decided</div>
+      <div class="muted" id="scoreText">Good 0 • Evil 0</div>
+    </div>
+
+    <div class="divider"></div>
+    <div id="endgameArea" class="hidden">
+      <div class="card">
+        <div class="big center" id="endgameText"></div>
+        <div class="muted center" id="endgameSub"></div>
+
+        <div class="divider"></div>
+        <div id="assassinArea" class="hidden">
+          <div class="muted">Assassin phase (optional): If Good won 3 quests, Assassin can guess Merlin.</div>
+          <label>Who is Merlin?</label>
+          <select id="assassinPick"></select>
+          <div style="margin-top:10px;" class="center">
+            <button id="btnAssassinConfirm" class="danger">Confirm assassination</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <button id="btnShowAllRoles" class="secondary">Show all roles (host view)</button>
+    <div id="allRoles" class="hidden" style="margin-top:10px;"></div>
+  </div>
+</div>
+
+<script>
+  // ---------- Utilities ----------
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  function evilCountFor(n) {
+    // Common Avalon scaling:
+    // 5-6 => 2 evil, 7-9 => 3 evil, 10 => 4 evil
+    if (n <= 6) return 2;
+    if (n <= 9) return 3;
+    return 4;
+  }
+
+  // Quest team sizes (standard Avalon):
+  // 5: 2,3,2,3,3
+  // 6: 2,3,4,3,4
+  // 7: 2,3,3,4,4
+  // 8: 3,4,4,5,5
+  // 9: 3,4,4,5,5
+  // 10:3,4,4,5,5
+  const teamSizes = {
+    5:[2,3,2,3,3],
+    6:[2,3,4,3,4],
+    7:[2,3,3,4,4],
+    8:[3,4,4,5,5],
+    9:[3,4,4,5,5],
+    10:[3,4,4,5,5]
+  };
+
+  // Rule: On 7+ players, Quest 4 needs 2 fails to fail (some versions use 7+ only)
+  function questNeedsTwoFails(nPlayers, questIndex) {
+    return (nPlayers >= 7 && questIndex === 3); // questIndex 3 => 4th quest
+  }
+
+  // ---------- State ----------
+  const state = {
+    started: false,
+    nPlayers: 7,
+    players: [],
+    roles: [],         // list of role objects assigned per player index
+    revealIndex: 0,
+    questResults: [null,null,null,null,null], // true=success, false=fail
+    currentQuest: 0,
+    goodScore: 0,
+    evilScore: 0,
+    ended: false,
+    assassinResolved: false
+  };
+
+  // ---------- Elements ----------
+  const setupCard = document.getElementById('setupCard');
+  const revealCard = document.getElementById('revealCard');
+  const gameCard = document.getElementById('gameCard');
+
+  const numPlayersEl = document.getElementById('numPlayers');
+  const playerNamesEl = document.getElementById('playerNames');
+  const setupHint = document.getElementById('setupHint');
+
+  const btnStart = document.getElementById('btnStart');
+  const btnResetAll = document.getElementById('btnResetAll');
+
+  const revealStep = document.getElementById('revealStep');
+  const roleDisplay = document.getElementById('roleDisplay');
+  const roleName = document.getElementById('roleName');
+  const roleTeam = document.getElementById('roleTeam');
+  const roleInfo = document.getElementById('roleInfo');
+  const btnShowRole = document.getElementById('btnShowRole');
+  const btnHideRole = document.getElementById('btnHideRole');
+  const btnNextPlayer = document.getElementById('btnNextPlayer');
+
+  const questGrid = document.getElementById('questGrid');
+  const btnQuestSuccess = document.getElementById('btnQuestSuccess');
+  const btnQuestFail = document.getElementById('btnQuestFail');
+  const statusText = document.getElementById('statusText');
+  const scoreText = document.getElementById('scoreText');
+
+  const endgameArea = document.getElementById('endgameArea');
+  const endgameText = document.getElementById('endgameText');
+  const endgameSub = document.getElementById('endgameSub');
+
+  const assassinArea = document.getElementById('assassinArea');
+  const assassinPick = document.getElementById('assassinPick');
+  const btnAssassinConfirm = document.getElementById('btnAssassinConfirm');
+
+  const btnShowAllRoles = document.getElementById('btnShowAllRoles');
+  const allRoles = document.getElementById('allRoles');
+
+  // role checkboxes
+  const roleMerlin = document.getElementById('roleMerlin');
+  const rolePercival = document.getElementById('rolePercival');
+  const roleAssassin = document.getElementById('roleAssassin');
+  const roleMorgana = document.getElementById('roleMorgana');
+  const roleOberon = document.getElementById('roleOberon');
+  const roleMordred = document.getElementById('roleMordred');
+
+  function updateSetupHint() {
+    const n = clampPlayers(Number(numPlayersEl.value));
+    const evilN = evilCountFor(n);
+
+    const selected = getSelectedRoleFlags();
+    const fixedEvil = selected.evilSpecialCount(); // assassin + morgana + oberon + mordred
+    const fixedGood = selected.goodSpecialCount(); // merlin + percival
+
+    setupHint.textContent =
+      `Players: ${n}. Evil should be ${evilN}. Selected special roles: Good ${fixedGood}, Evil ${fixedEvil}. The rest will be plain Servants/Minions automatically.`;
+  }
+
+  function clampPlayers(n) {
+    if (!Number.isFinite(n)) return 7;
+    return Math.max(5, Math.min(10, Math.floor(n)));
+  }
+
+  function getSelectedRoleFlags() {
+    return {
+      merlin: roleMerlin.checked,
+      percival: rolePercival.checked,
+      assassin: roleAssassin.checked,
+      morgana: roleMorgana.checked,
+      oberon: roleOberon.checked,
+      mordred: roleMordred.checked,
+      evilSpecialCount() {
+        return (this.assassin?1:0) + (this.morgana?1:0) + (this.oberon?1:0) + (this.mordred?1:0);
+      },
+      goodSpecialCount() {
+        return (this.merlin?1:0) + (this.percival?1:0);
+      }
+    };
+  }
+
+  function parsePlayers(n) {
+    const raw = playerNamesEl.value.trim();
+    let names = [];
+    if (raw.length > 0) {
+      names = raw.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    // Fill or trim to n
+    const players = [];
+    for (let i = 0; i < n; i++) {
+      players.push(names[i] || `Player ${i+1}`);
+    }
+    return players;
+  }
+
+  function buildRoles(n, flags) {
+    const evilN = evilCountFor(n);
+
+    // Build evil roles
+    const evil = [];
+    if (flags.assassin) evil.push(makeRole('Assassin', 'Evil', 'You are Evil. At the end, if Good wins 3 quests, you may guess Merlin.'));
+    if (flags.morgana) evil.push(makeRole('Morgana', 'Evil', 'You appear as Merlin to Percival.'));
+    if (flags.oberon) evil.push(makeRole('Oberon', 'Evil', 'You are Evil, but you do NOT know the other Evil players, and they do not know you.'));
+    if (flags.mordred) evil.push(makeRole('Mordred', 'Evil', 'Merlin does NOT see you as Evil.'));
+
+    // Ensure at least one evil exists (classic requires evil minions)
+    while (evil.length < evilN) {
+      evil.push(makeRole('Minion of Mordred', 'Evil', 'You are Evil.'));
+    }
+    // If too many selected, trim (keep Assassin first if exists)
+    if (evil.length > evilN) {
+      // Keep assassin if present
+      const assassinIdx = evil.findIndex(r => r.name === 'Assassin');
+      const kept = [];
+      if (assassinIdx >= 0) kept.push(evil[assassinIdx]);
+      for (let i = 0; i < evil.length && kept.length < evilN; i++) {
+        if (i === assassinIdx) continue;
+        kept.push(evil[i]);
+      }
+      evil.length = 0;
+      evil.push(...kept);
+    }
+
+    // Build good roles
+    const good = [];
+    if (flags.merlin) good.push(makeRole('Merlin', 'Good', 'You know most Evil players (except Mordred). Be subtle.'));
+    if (flags.percival) good.push(makeRole('Percival', 'Good', 'You know who might be Merlin (Merlin/Morgana). Protect Merlin.'));
+    while (good.length < (n - evilN)) {
+      good.push(makeRole('Loyal Servant of Arthur', 'Good', 'You are Good.'));
+    }
+
+    const all = evil.concat(good);
+    shuffle(all);
+    return all;
+  }
+
+  function makeRole(name, team, blurb) {
+    return { name, team, blurb };
+  }
+
+  function buildKnowledgeText(playerIndex) {
+    const me = state.roles[playerIndex];
+    const myName = state.players[playerIndex];
+
+    const evilIdxs = state.roles
+      .map((r, i) => ({r, i}))
+      .filter(x => x.r.team === 'Evil')
+      .map(x => x.i);
+
+    const evilNames = evilIdxs.map(i => state.players[i]);
+    const evilRoles = evilIdxs.map(i => state.roles[i].name);
+
+    // Helper: "known evil to evil (except Oberon)".
+    function evilKnownToEvil(i) {
+      const role = state.roles[i].name;
+      return role !== 'Oberon';
+    }
+
+    // Merlin sees evil except Mordred
+    if (me.name === 'Merlin') {
+      const seen = evilIdxs.filter(i => state.roles[i].name !== 'Mordred').map(i => state.players[i]);
+      return `You see (as Evil): ${seen.length ? seen.join(', ') : 'Nobody'}.\n(You do NOT see Mordred.)`;
+    }
+
+    // Percival sees Merlin + Morgana as candidates
+    if (me.name === 'Percival') {
+      const candidates = [];
+      state.roles.forEach((r, i) => {
+        if (r.name === 'Merlin' || r.name === 'Morgana') candidates.push(state.players[i]);
+      });
+      return `Possible Merlin: ${candidates.length ? candidates.join(' or ') : 'None (Merlin/Morgana not in game?)'}.`;
+    }
+
+    // Evil (except Oberon) sees other evil (except Oberon)
+    if (me.team === 'Evil') {
+      if (me.name === 'Oberon') {
+        return `You are Evil, but you do not know the other Evil players.`;
+      }
+      const knownEvil = evilIdxs
+        .filter(i => i !== playerIndex)
+        .filter(i => evilKnownToEvil(i))
+        .map(i => `${state.players[i]} (${state.roles[i].name})`);
+      return `Other Evil (known to you): ${knownEvil.length ? knownEvil.join(', ') : 'None'}.`;
+    }
+
+    return `You are Good. Try to pass quests and identify Evil.`;
+  }
+
+  function renderQuestGrid() {
+    questGrid.innerHTML = '';
+    const n = state.nPlayers;
+    const sizes = teamSizes[n] || [2,3,3,4,4];
+
+    for (let q = 0; q < 5; q++) {
+      const res = state.questResults[q];
+      const needs2 = questNeedsTwoFails(n, q);
+      const box = document.createElement('div');
+      box.className = 'questBox';
+      if (res === true) box.classList.add('good');
+      if (res === false) box.classList.add('evil');
+
+      const title = document.createElement('div');
+      title.style.fontWeight = '700';
+      title.textContent = `Quest ${q+1}`;
+
+      const sub = document.createElement('div');
+      sub.className = 'muted';
+      sub.textContent = `Team: ${sizes[q]} • ${needs2 ? '2 fails to fail' : '1 fail fails'}`;
+
+      const status = document.createElement('div');
+      status.style.marginTop = '6px';
+      status.style.fontWeight = '700';
+      status.textContent = (res === null) ? (q === state.currentQuest ? 'Current' : 'Pending')
+        : (res ? 'SUCCESS' : 'FAIL');
+
+      box.appendChild(title);
+      box.appendChild(sub);
+      box.appendChild(status);
+      questGrid.appendChild(box);
+    }
+  }
+
+  function updateScoreAndStatus() {
+    state.goodScore = state.questResults.filter(x => x === true).length;
+    state.evilScore = state.questResults.filter(x => x === false).length;
+
+    scoreText.textContent = `Good ${state.goodScore} • Evil ${state.evilScore}`;
+
+    const q = state.currentQuest;
+    if (!state.ended) {
+      statusText.textContent = `Quest ${q+1} — not decided`;
+    }
+
+    // End conditions
+    if (state.goodScore >= 3) {
+      state.ended = true;
+      statusText.textContent = `Good has 3 successes`;
+      endgameArea.classList.remove('hidden');
+      endgameText.textContent = `Good wins… for now`;
+      endgameSub.textContent = `If Assassin is in the game, they may guess Merlin.`;
+
+      if (state.roles.some(r => r.name === 'Assassin')) {
+        assassinArea.classList.remove('hidden');
+        populateAssassinPick();
+      } else {
+        assassinArea.classList.add('hidden');
+        endgameSub.textContent = `No Assassin role included. Final result: Good wins.`;
+      }
+      disableQuestButtons(true);
+    }
+
+    if (state.evilScore >= 3) {
+      state.ended = true;
+      statusText.textContent = `Evil has 3 fails`;
+      endgameArea.classList.remove('hidden');
+      endgameText.textContent = `Evil wins`;
+      endgameSub.textContent = `Final result: Evil wins.`;
+      assassinArea.classList.add('hidden');
+      disableQuestButtons(true);
+    }
+  }
+
+  function disableQuestButtons(disabled) {
+    btnQuestSuccess.disabled = disabled;
+    btnQuestFail.disabled = disabled;
+  }
+
+  function populateAssassinPick() {
+    assassinPick.innerHTML = '';
+    state.players.forEach((p, idx) => {
+      const opt = document.createElement('option');
+      opt.value = String(idx);
+      opt.textContent = p;
+      assassinPick.appendChild(opt);
+    });
+  }
+
+  // ---------- Flow ----------
+  function resetAll() {
+    state.started = false;
+    state.players = [];
+    state.roles = [];
+    state.revealIndex = 0;
+    state.questResults = [null,null,null,null,null];
+    state.currentQuest = 0;
+    state.goodScore = 0;
+    state.evilScore = 0;
+    state.ended = false;
+    state.assassinResolved = false;
+
+    setupCard.classList.remove('hidden');
+    revealCard.classList.add('hidden');
+    gameCard.classList.add('hidden');
+
+    roleDisplay.classList.add('hidden');
+    btnShowRole.classList.remove('hidden');
+    btnHideRole.classList.add('hidden');
+    btnNextPlayer.disabled = true;
+
+    allRoles.classList.add('hidden');
+    allRoles.innerHTML = '';
+
+    endgameArea.classList.add('hidden');
+    assassinArea.classList.add('hidden');
+    disableQuestButtons(false);
+
+    updateSetupHint();
+  }
+
+  function startGame() {
+    const n = clampPlayers(Number(numPlayersEl.value));
+    state.nPlayers = n;
+
+    const flags = getSelectedRoleFlags();
+    const evilN = evilCountFor(n);
+    if (flags.evilSpecialCount() > evilN) {
+      alert(`Too many evil special roles selected. Evil players for ${n} is ${evilN}. Uncheck some evil roles.`);
+      return;
+    }
+
+    state.players = parsePlayers(n);
+    state.roles = buildRoles(n, flags);
+    state.started = true;
+
+    // Reveal UI
+    setupCard.classList.add('hidden');
+    revealCard.classList.remove('hidden');
+    gameCard.classList.add('hidden');
+
+    state.revealIndex = 0;
+    showRevealStep();
+  }
+
+  function showRevealStep() {
+    const i = state.revealIndex;
+    revealStep.textContent = `Hand phone to: ${state.players[i]} (Player ${i+1} of ${state.nPlayers})`;
+    roleDisplay.classList.add('hidden');
+    btnShowRole.classList.remove('hidden');
+    btnHideRole.classList.add('hidden');
+    btnNextPlayer.disabled = true;
+  }
+
+  function showRole() {
+    const i = state.revealIndex;
+    const r = state.roles[i];
+    roleName.textContent = r.name;
+    roleTeam.textContent = `Team: ${r.team}`;
+    const knowledge = buildKnowledgeText(i).replaceAll('\n', '<br>');
+    roleInfo.innerHTML = `<div style="margin-bottom:8px;">${r.blurb}</div><div style="opacity:.95">${knowledge}</div>`;
+    roleDisplay.classList.remove('hidden');
+    btnShowRole.classList.add('hidden');
+    btnHideRole.classList.remove('hidden');
+    btnNextPlayer.disabled = false;
+  }
+
+  function hideRole() {
+    roleDisplay.classList.add('hidden');
+    btnShowRole.classList.remove('hidden');
+    btnHideRole.classList.add('hidden');
+    btnNextPlayer.disabled = true;
+  }
+
+  function nextPlayer() {
+    if (state.revealIndex < state.nPlayers - 1) {
+      state.revealIndex += 1;
+      showRevealStep();
+    } else {
+      // Done revealing
+      revealCard.classList.add('hidden');
+      gameCard.classList.remove('hidden');
+
+      renderQuestGrid();
+      updateScoreAndStatus();
+    }
+  }
+
+  function markQuest(resultSuccess) {
+    if (state.ended) return;
+    const q = state.currentQuest;
+    if (state.questResults[q] !== null) return;
+
+    state.questResults[q] = resultSuccess;
+    // move currentQuest to next undecided
+    let next = state.questResults.findIndex(x => x === null);
+    if (next === -1) next = 4;
+    state.currentQuest = next;
+
+    renderQuestGrid();
+    updateScoreAndStatus();
+
+    if (!state.ended) {
+      statusText.textContent = `Quest ${state.currentQuest+1} — not decided`;
+    }
+  }
+
+  function resolveAssassination() {
+    if (state.assassinResolved) return;
+
+    const pickIdx = Number(assassinPick.value);
+    const pickedRole = state.roles[pickIdx];
+
+    state.assassinResolved = true;
+
+    if (pickedRole.name === 'Merlin') {
+      endgameText.textContent = `Assassin found Merlin — Evil wins`;
+      endgameSub.textContent = `${state.players[pickIdx]} was Merlin.`;
+    } else {
+      endgameText.textContent = `Assassin missed — Good wins`;
+      endgameSub.textContent = `${state.players[pickIdx]} was ${pickedRole.name}.`;
+    }
+    assassinArea.classList.add('hidden');
+  }
+
+  function toggleAllRoles() {
+    if (allRoles.classList.contains('hidden')) {
+      allRoles.classList.remove('hidden');
+      const lines = state.players.map((p, i) => {
+        const r = state.roles[i];
+        return `<div class="pill">${p}: <b>${r.name}</b> (${r.team})</div>`;
+      }).join('');
+      allRoles.innerHTML = lines;
+    } else {
+      allRoles.classList.add('hidden');
+      allRoles.innerHTML = '';
+    }
+  }
+
+  // ---------- Events ----------
+  numPlayersEl.addEventListener('input', updateSetupHint);
+  [roleMerlin, rolePercival, roleAssassin, roleMorgana, roleOberon, roleMordred].forEach(el => el.addEventListener('change', updateSetupHint));
+
+  btnStart.addEventListener('click', startGame);
+  btnResetAll.addEventListener('click', resetAll);
+
+  btnShowRole.addEventListener('click', showRole);
+  btnHideRole.addEventListener('click', hideRole);
+  btnNextPlayer.addEventListener('click', nextPlayer);
+
+  btnQuestSuccess.addEventListener('click', () => markQuest(true));
+  btnQuestFail.addEventListener('click', () => markQuest(false));
+
+  btnAssassinConfirm.addEventListener('click', resolveAssassination);
+
+  btnShowAllRoles.addEventListener('click', toggleAllRoles);
+
+  // init
+  updateSetupHint();
+</script>
+</body>
+</html>
