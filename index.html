@@ -32,10 +32,24 @@
     .good { background:#e8f5e9; }
     .evil { background:#ffebee; }
     .hidden { display:none; }
-    .teamPicker { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 6px; margin-top:6px; }
+    .teamPicker { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; margin-top:4px; }
+    .teamPicker .checkbox { margin: 2px 0; gap: 6px; padding: 4px 6px; font-size: 14px; }
+    .teamPicker .checkbox input { width: 16px; height: 16px; }
     #voteSummary, #missionPrompt { font-weight: 600; }
+    .revealContainer { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+    .revealCard {
+      width: 64px; height: 82px; border-radius: 12px; background:#e0e7ff; color:#1a237e;
+      display:flex; align-items:center; justify-content:center; font-weight:800; letter-spacing:0.5px;
+      opacity:0; transform: translateY(12px) scale(.96); transition: all .3s ease;
+    }
+    .revealCard.show { opacity:1; transform: translateY(0) scale(1); }
+    .revealCard.pass { background:#e8f5e9; color:#1b5e20; }
+    .revealCard.fail { background:#ffebee; color:#b71c1c; }
     .checkbox { display:flex; align-items:center; gap: 8px; margin: 6px 0; }
     .checkbox input { width: 18px; height: 18px; }
+    /* Compact overrides for proposal picker */
+    .teamPicker .checkbox { margin: 1px 0; gap: 4px; padding: 2px 3px; font-size: 14px; }
+    .teamPicker .checkbox input { width: 14px; height: 14px; }
     .divider { height:1px; background:#eceef6; margin: 14px 0; }
     .roleCard { border-radius: 18px; padding: 18px; background:#111; color:#fff; }
     .roleName { font-size: 26px; font-weight: 800; margin: 4px 0 8px; }
@@ -51,7 +65,7 @@
     <h1>Avalon</h1>
     <button class="linkbtn" id="btnResetAll" title="Reset everything">Reset</button>
   </div>
-  <div class="muted">Pass-the-phone role reveal + 5 quest tracker.</div>
+  <!-- <div class="muted">Pass-the-phone role reveal + 5 quest tracker.</div> -->
 
   <!-- SETUP -->
   <div class="card" id="setupCard">
@@ -129,14 +143,24 @@
       </div>
     </div>
 
-    <div id="missionArea" class="hidden" style="margin-top:12px;">
-      <div id="missionPrompt"></div>
-      <div class="muted" id="missionFailRule" style="margin-top:4px;"></div>
-      <div class="row" style="margin-top:8px;">
-        <button id="btnCardPass" class="secondary" style="flex:1;">PASS</button>
-        <button id="btnCardFail" class="danger" style="flex:1;">FAIL</button>
-      </div>
+  <div id="missionArea" class="hidden" style="margin-top:12px;">
+    <div id="missionPrompt"></div>
+    <div class="muted" id="missionFailRule" style="margin-top:4px;"></div>
+    <div class="row" style="margin-top:8px;">
+      <button id="btnCardPass" class="secondary" style="flex:1;">PASS</button>
+      <button id="btnCardFail" class="danger" style="flex:1;">FAIL</button>
     </div>
+  </div>
+  <div id="missionRevealAction" class="hidden" style="margin-top:10px;">
+    <button id="btnShowReveal" class="secondary" style="width:100%;">Show the results</button>
+  </div>
+  <div id="missionRevealArea" class="hidden revealOverlay">
+    <div class="revealPanel">
+      <div id="missionRevealTitle" class="muted" style="font-weight:700;"></div>
+      <div id="missionRevealContainer" class="revealContainer"></div>
+      <div class="muted" id="missionRevealNote" style="margin-top:4px;"></div>
+    </div>
+  </div>
 
     <div class="divider"></div>
     <div class="center">
@@ -224,6 +248,8 @@
     currentProposal: [],
     missionStepIndex: 0,
     missionFailCount: 0,
+    missionCards: [],
+    missionRevealReady: false,
     questPhase: 'proposal' // 'proposal' | 'vote' | 'mission'
   };
 
@@ -259,6 +285,12 @@
   const voteSummary = document.getElementById('voteSummary');
   const missionPrompt = document.getElementById('missionPrompt');
   const missionFailRule = document.getElementById('missionFailRule');
+  const missionRevealAction = document.getElementById('missionRevealAction');
+  const btnShowReveal = document.getElementById('btnShowReveal');
+  const missionRevealArea = document.getElementById('missionRevealArea');
+  const missionRevealTitle = document.getElementById('missionRevealTitle');
+  const missionRevealContainer = document.getElementById('missionRevealContainer');
+  const missionRevealNote = document.getElementById('missionRevealNote');
   const btnSubmitProposal = document.getElementById('btnSubmitProposal');
   const btnVoteApprove = document.getElementById('btnVoteApprove');
   const btnVoteReject = document.getElementById('btnVoteReject');
@@ -535,6 +567,7 @@
       proposalArea.classList.add('hidden');
       voteArea.classList.add('hidden');
       missionArea.classList.add('hidden');
+      missionRevealAction.classList.add('hidden');
       return;
     }
 
@@ -546,6 +579,7 @@
     const showProposal = state.questPhase === 'proposal' && !questResolved;
     const showVote = state.questPhase === 'vote' && !questResolved;
     const showMission = state.questPhase === 'mission' && !questResolved;
+    const showRevealAction = state.questPhase === 'mission' && state.missionRevealReady && !questResolved;
 
     if (showProposal) {
       proposalArea.classList.remove('hidden');
@@ -569,6 +603,12 @@
       missionArea.classList.add('hidden');
     }
 
+    if (showRevealAction) {
+      missionRevealAction.classList.remove('hidden');
+    } else {
+      missionRevealAction.classList.add('hidden');
+    }
+
     updateQuestStatusText();
   }
 
@@ -577,7 +617,12 @@
     state.currentProposal = [];
     state.missionStepIndex = 0;
     state.missionFailCount = 0;
+    state.missionCards = [];
+    state.missionRevealReady = false;
     state.questPhase = 'proposal';
+    missionRevealArea.classList.add('hidden');
+    missionRevealContainer.innerHTML = '';
+    missionRevealNote.textContent = '';
     renderProposalState();
   }
 
@@ -610,11 +655,17 @@
     state.questPhase = 'mission';
     state.missionStepIndex = 0;
     state.missionFailCount = 0;
+    state.missionCards = [];
+    state.missionRevealReady = false;
     renderProposalState();
   }
 
   function renderMissionStep() {
     if (state.ended || state.questPhase !== 'mission') return;
+    missionRevealArea.classList.add('hidden');
+    missionRevealContainer.innerHTML = '';
+    missionRevealNote.textContent = '';
+    missionRevealAction.classList.add('hidden');
     const team = state.currentProposal;
     const idx = state.missionStepIndex;
     const needs2 = questNeedsTwoFails(state.nPlayers, state.currentQuest);
@@ -626,12 +677,18 @@
 
   function handleMissionCard(isPass) {
     if (state.ended || state.questPhase !== 'mission') return;
+    state.missionCards.push(isPass);
     if (!isPass) state.missionFailCount += 1;
     state.missionStepIndex += 1;
     if (state.missionStepIndex >= state.currentProposal.length) {
       const needs2 = questNeedsTwoFails(state.nPlayers, state.currentQuest);
       const success = needs2 ? state.missionFailCount < 2 : state.missionFailCount === 0;
-      resolveQuestResult(success);
+      state.missionRevealReady = true;
+      missionFailRule.textContent = '';
+      missionPrompt.textContent = 'All cards submitted. Tap "Show the results" to reveal.';
+      missionRevealAction.classList.remove('hidden');
+      btnCardPass.disabled = true;
+      btnCardFail.disabled = true;
       return;
     }
     renderMissionStep();
@@ -648,6 +705,7 @@
     if (!state.ended) {
       if (reasonText) updateQuestStatusText(reasonText);
       resetQuestFlowForCurrentQuest();
+      disableQuestButtons(false);
     } else if (reasonText) {
       statusText.textContent = reasonText;
     }
@@ -732,8 +790,37 @@
     [btnSubmitProposal, btnVoteApprove, btnVoteReject, btnCardPass, btnCardFail].forEach(btn => {
       btn.disabled = disabled;
     });
+    btnShowReveal.disabled = disabled;
     const inputs = teamPicker.querySelectorAll('input[type="checkbox"]');
     inputs.forEach(cb => cb.disabled = disabled);
+  }
+
+  function showMissionReveal(success, needs2) {
+    disableQuestButtons(true);
+    missionRevealAction.classList.add('hidden');
+    missionRevealArea.classList.remove('hidden');
+    missionRevealContainer.innerHTML = '';
+    const cards = shuffle([...state.missionCards]);
+    missionRevealTitle.textContent = `Quest ${state.currentQuest+1} results:`;
+    missionRevealNote.textContent = 'Cards revealed in random order for suspense.';
+
+    cards.forEach((isPass, idx) => {
+      const card = document.createElement('div');
+      card.className = 'revealCard';
+      card.textContent = isPass ? 'PASS' : 'FAIL';
+      missionRevealContainer.appendChild(card);
+      setTimeout(() => {
+        card.classList.add(isPass ? 'pass' : 'fail', 'show');
+      }, 300 + idx * 650);
+    });
+
+    const revealDuration = 1000 + cards.length * 1000 + 2000;
+    setTimeout(() => {
+      const reasonText = needs2
+        ? (success ? 'Quest succeeded (fewer than 2 FAIL cards).' : 'Quest failed (2+ FAIL cards).')
+        : (success ? 'Quest succeeded (no FAIL cards).' : 'Quest failed (at least one FAIL card).');
+      resolveQuestResult(success, reasonText);
+    }, revealDuration);
   }
 
   function setHostControlsVisibility() {
@@ -774,6 +861,7 @@
     state.currentProposal = [];
     state.missionStepIndex = 0;
     state.missionFailCount = 0;
+    state.missionCards = [];
     state.questPhase = 'proposal';
 
     setupCard.classList.remove('hidden');
@@ -800,6 +888,9 @@
     setHostControlsVisibility();
 
     updateSetupHint();
+    missionRevealArea.classList.add('hidden');
+    missionRevealContainer.innerHTML = '';
+    missionRevealNote.textContent = '';
     renderProposalState();
   }
 
@@ -931,6 +1022,11 @@
   btnVoteReject.addEventListener('click', () => handleVoteResult(false));
   btnCardPass.addEventListener('click', () => handleMissionCard(true));
   btnCardFail.addEventListener('click', () => handleMissionCard(false));
+  btnShowReveal.addEventListener('click', () => {
+    const needs2 = questNeedsTwoFails(state.nPlayers, state.currentQuest);
+    const success = needs2 ? state.missionFailCount < 2 : state.missionFailCount === 0;
+    showMissionReveal(success, needs2);
+  });
 
   btnAssassinConfirm.addEventListener('click', resolveAssassination);
 
