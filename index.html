@@ -874,7 +874,7 @@
       }, 300 + idx * 650);
     });
 
-    const revealDuration = 300 + cards.length * 650 + 400;
+    const revealDuration = 1000 + cards.length * 1000 + 2000;
     setTimeout(() => {
       const reasonText = needs2
         ? (success ? 'Quest succeeded (fewer than 2 FAIL cards).' : 'Quest failed (2+ FAIL cards).')
