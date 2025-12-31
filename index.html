@@ -25,6 +25,7 @@
     button:disabled { opacity: .5; cursor: not-allowed; }
     .pill { display:inline-block; padding: 6px 10px; border-radius: 999px; background:#eef1ff; margin: 6px 6px 0 0; font-size: 13px; }
     .muted { color:#666; font-size: 13px; }
+    .leaderLine { display:block; font-size:16px; font-weight:700; color:#111; margin-top:4px; }
     .center { text-align:center; }
     .big { font-size: 22px; font-weight: 700; }
     .questGrid { display:grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
@@ -72,8 +73,8 @@
     <h2>1) Setup</h2>
     <div class="row">
       <div style="flex:1; min-width: 160px;">
-        <label>Number of players (5–10)</label>
-        <input id="numPlayers" type="number" min="5" max="10" value="7" />
+        <label>Number of players (5–14)</label>
+        <input id="numPlayers" type="number" min="5" max="14" value="7" />
       </div>
       <div style="flex:2; min-width: 240px;">
         <label>Player names (optional, comma separated)</label>
@@ -204,26 +205,35 @@
 
   function evilCountFor(n) {
     // Common Avalon scaling:
-    // 5-6 => 2 evil, 7-9 => 3 evil, 10 => 4 evil
+    // 5-6 => 2 evil, 7-9 => 3 evil, 10-12 => 4 evil, 13-14 => 5 evil
     if (n <= 6) return 2;
     if (n <= 9) return 3;
-    return 4;
+    if (n <= 12) return 4;
+    return 5;
   }
 
-  // Quest team sizes (standard Avalon):
+  // Quest team sizes (standard Avalon, extended 11-14):
   // 5: 2,3,2,3,3
   // 6: 2,3,4,3,4
   // 7: 2,3,3,4,4
   // 8: 3,4,4,5,5
   // 9: 3,4,4,5,5
   // 10:3,4,4,5,5
+  // 11:4,5,5,6,6
+  // 12:4,5,5,6,6
+  // 13:4,5,6,7,7
+  // 14:5,6,6,7,7
   const teamSizes = {
     5:[2,3,2,3,3],
     6:[2,3,4,3,4],
     7:[2,3,3,4,4],
     8:[3,4,4,5,5],
     9:[3,4,4,5,5],
-    10:[3,4,4,5,5]
+    10:[3,4,4,5,5],
+    11:[4,5,5,6,6],
+    12:[4,5,5,6,6],
+    13:[4,5,6,7,7],
+    14:[5,6,6,7,7]
   };
 
   // Rule: On 7+ players, Quest 4 needs 2 fails to fail (some versions use 7+ only)
@@ -250,7 +260,10 @@
     missionFailCount: 0,
     missionCards: [],
     missionRevealReady: false,
-    questPhase: 'proposal' // 'proposal' | 'vote' | 'mission'
+    questPhase: 'proposal', // 'proposal' | 'vote' | 'mission'
+    currentLeaderIndex: null,
+    usedApprovedLeaders: [],
+    currentQuestLeaders: []
   };
 
   // ---------- Elements ----------
@@ -327,7 +340,10 @@
     const oberonManual = roleOberon.dataset.manual === 'true';
     const mordredManual = roleMordred.dataset.manual === 'true';
 
-    // For 10 players, default all special roles on unless manually overridden.
+    // Recommended defaults by player count:
+    // 10: all specials on
+    // 11-12: Merlin, Percival, Assassin, Morgana, Mordred, Oberon
+    // 13-14: same as 11-12 (evil minion auto-fills the 5th evil)
     if (n === 10) {
       if (!merlinManual) roleMerlin.checked = true;
       if (!percivalManual) rolePercival.checked = true;
@@ -335,6 +351,13 @@
       if (!morganaManual) roleMorgana.checked = true;
       if (!oberonManual) roleOberon.checked = true;
       if (!mordredManual) roleMordred.checked = true;
+    } else if (n >= 11 && n <= 14) {
+      if (!merlinManual) roleMerlin.checked = true;
+      if (!percivalManual) rolePercival.checked = true;
+      if (!assassinManual) roleAssassin.checked = true;
+      if (!morganaManual) roleMorgana.checked = true;
+      if (!mordredManual) roleMordred.checked = true;
+      if (!oberonManual) roleOberon.checked = true;
     }
 
     if (n === 6 && !percivalManual && !morganaManual) {
@@ -380,7 +403,7 @@
 
   function clampPlayers(n) {
     if (!Number.isFinite(n)) return 7;
-    return Math.max(5, Math.min(10, Math.floor(n)));
+    return Math.max(5, Math.min(14, Math.floor(n)));
   }
 
   function getSelectedRoleFlags() {
@@ -426,7 +449,7 @@
 
     // Ensure at least one evil exists (classic requires evil minions)
     while (evil.length < evilN) {
-      evil.push(makeRole('Minion of Mordred', 'Evil', 'You are Evil.'));
+      evil.push(makeRole('Evil Without Special Role', 'Evil', 'You are Evil.'));
     }
     // If too many selected, trim (keep Assassin first if exists)
     if (evil.length > evilN) {
@@ -518,6 +541,25 @@
     return sizes[state.currentQuest] || sizes[sizes.length - 1];
   }
 
+  function pickNewLeader(options = {}) {
+    const { exclude = [], avoidUsedAcross = false } = options;
+    if (!state.players.length) return null;
+    const excludeSet = new Set(exclude);
+    let candidates = state.players.map((_, i) => i).filter(i => !excludeSet.has(i));
+
+    if (avoidUsedAcross) {
+      const usedSet = new Set(state.usedApprovedLeaders);
+      const filtered = candidates.filter(i => !usedSet.has(i));
+      if (filtered.length) candidates = filtered;
+    }
+
+    if (!candidates.length) {
+      candidates = state.players.map((_, i) => i).filter(i => !excludeSet.has(i));
+    }
+    if (!candidates.length) return null;
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
   function updateQuestStatusText(customText) {
     if (customText) {
       statusText.textContent = customText;
@@ -572,10 +614,13 @@
     }
 
     const teamSize = currentQuestTeamSize();
-    proposalStatus.textContent = `Quest ${state.currentQuest+1}: Proposal ${state.proposalAttempt} of 5`;
+    const leaderName = (state.currentLeaderIndex !== null) ? state.players[state.currentLeaderIndex] : '—';
+    proposalStatus.innerHTML = `Quest ${state.currentQuest+1}: Proposal ${state.proposalAttempt} of 5` +
+      `<span class="leaderLine">Leader: ${leaderName}</span>`;
     teamSizeText.textContent = `Select ${teamSize} players for this quest.`;
 
     const questResolved = state.questResults[state.currentQuest] !== null;
+    
     const showProposal = state.questPhase === 'proposal' && !questResolved;
     const showVote = state.questPhase === 'vote' && !questResolved;
     const showMission = state.questPhase === 'mission' && !questResolved;
@@ -620,6 +665,10 @@
     state.missionCards = [];
     state.missionRevealReady = false;
     state.questPhase = 'proposal';
+    state.currentQuestLeaders = [];
+    const leader = pickNewLeader({ avoidUsedAcross: true });
+    state.currentLeaderIndex = leader;
+    if (leader !== null) state.currentQuestLeaders.push(leader);
     missionRevealArea.classList.add('hidden');
     missionRevealContainer.innerHTML = '';
     missionRevealNote.textContent = '';
@@ -649,8 +698,17 @@
       }
       state.currentProposal = [];
       state.questPhase = 'proposal';
+      const newLeader = pickNewLeader({ exclude: state.currentQuestLeaders, avoidUsedAcross: true });
+      state.currentLeaderIndex = newLeader;
+      if (newLeader !== null) {
+        state.currentQuestLeaders.push(newLeader);
+      }
       renderProposalState();
       return;
+    }
+    // Approved proposal: record leader as used across quests
+    if (state.currentLeaderIndex !== null && !state.usedApprovedLeaders.includes(state.currentLeaderIndex)) {
+      state.usedApprovedLeaders.push(state.currentLeaderIndex);
     }
     state.questPhase = 'mission';
     state.missionStepIndex = 0;
@@ -698,7 +756,6 @@
     state.questResults[state.currentQuest] = resultSuccess;
     let next = state.questResults.findIndex(x => x === null);
     if (next === -1) next = 4;
-    const finishedQuest = state.currentQuest;
     state.currentQuest = next;
     renderQuestGrid();
     updateScoreAndStatus();
@@ -814,7 +871,7 @@
       }, 300 + idx * 650);
     });
 
-    const revealDuration = 1000 + cards.length * 1000 + 2000;
+    const revealDuration = 300 + cards.length * 650 + 400;
     setTimeout(() => {
       const reasonText = needs2
         ? (success ? 'Quest succeeded (fewer than 2 FAIL cards).' : 'Quest failed (2+ FAIL cards).')
@@ -863,6 +920,9 @@
     state.missionFailCount = 0;
     state.missionCards = [];
     state.questPhase = 'proposal';
+    state.currentLeaderIndex = null;
+    state.usedApprovedLeaders = [];
+    state.currentQuestLeaders = [];
 
     setupCard.classList.remove('hidden');
     revealCard.classList.add('hidden');
