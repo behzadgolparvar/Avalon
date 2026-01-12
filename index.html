@@ -61,6 +61,8 @@
     .roleInfo { background: rgba(255,255,255,.08); padding: 12px; border-radius: 14px; font-size: 14px; line-height:1.35; }
     .topBar { display:flex; justify-content:space-between; align-items:center; gap: 10px; }
     .linkbtn { background: transparent; color:#b6c4ff; padding: 0; text-decoration: underline; font-size: 14px; }
+    .revealName { font-size: 20px; font-weight: 800; color: #ffffff; }
+
   </style>
 </head>
 <body>
@@ -163,6 +165,9 @@
       <div id="missionRevealTitle" class="muted" style="font-weight:700;"></div>
       <div id="missionRevealContainer" class="revealContainer"></div>
       <div class="muted" id="missionRevealNote" style="margin-top:4px;"></div>
+      <div style="margin-top:12px;">
+        <button id="btnRevealContinue" class="secondary" style="width:100%;" disabled>Go to next quest</button>
+      </div>
     </div>
   </div>
 
@@ -263,6 +268,7 @@
     missionFailCount: 0,
     missionCards: [],
     missionRevealReady: false,
+    pendingQuestResult: null,
     questPhase: 'proposal', // 'proposal' | 'vote' | 'mission'
     currentLeaderIndex: null,
     usedApprovedLeaders: [],
@@ -307,6 +313,7 @@
   const missionRevealTitle = document.getElementById('missionRevealTitle');
   const missionRevealContainer = document.getElementById('missionRevealContainer');
   const missionRevealNote = document.getElementById('missionRevealNote');
+  const btnRevealContinue = document.getElementById('btnRevealContinue');
   const btnSubmitProposal = document.getElementById('btnSubmitProposal');
   const btnVoteApprove = document.getElementById('btnVoteApprove');
   const btnVoteReject = document.getElementById('btnVoteReject');
@@ -667,6 +674,7 @@
     state.missionFailCount = 0;
     state.missionCards = [];
     state.missionRevealReady = false;
+    state.pendingQuestResult = null;
     state.questPhase = 'proposal';
     state.currentQuestLeaders = [];
     const leader = pickNewLeader({ avoidUsedAcross: true });
@@ -718,6 +726,7 @@
     state.missionFailCount = 0;
     state.missionCards = [];
     state.missionRevealReady = false;
+    state.pendingQuestResult = null;
     renderProposalState();
   }
 
@@ -757,6 +766,11 @@
 
   function resolveQuestResult(resultSuccess, reasonText) {
     state.questResults[state.currentQuest] = resultSuccess;
+    state.pendingQuestResult = null;
+    missionRevealArea.classList.add('hidden');
+    missionRevealContainer.innerHTML = '';
+    missionRevealNote.textContent = '';
+    missionRevealAction.classList.add('hidden');
     let next = state.questResults.findIndex(x => x === null);
     if (next === -1) next = 4;
     state.currentQuest = next;
@@ -851,6 +865,7 @@
       btn.disabled = disabled;
     });
     btnShowReveal.disabled = disabled;
+    btnRevealContinue.disabled = disabled;
     const inputs = teamPicker.querySelectorAll('input[type="checkbox"]');
     inputs.forEach(cb => cb.disabled = disabled);
   }
@@ -860,6 +875,7 @@
     missionRevealAction.classList.add('hidden');
     missionRevealArea.classList.remove('hidden');
     missionRevealContainer.innerHTML = '';
+    btnRevealContinue.disabled = true;
     const cards = shuffle([...state.missionCards]);
     missionRevealTitle.textContent = `Quest ${state.currentQuest+1} results:`;
     missionRevealNote.textContent = 'Cards revealed in random order for suspense.';
@@ -874,12 +890,14 @@
       }, 300 + idx * 650);
     });
 
-    const revealDuration = 1000 + cards.length * 1000 + 2000;
+    const reasonText = needs2
+      ? (success ? 'Quest succeeded (fewer than 2 FAIL cards).' : 'Quest failed (2+ FAIL cards).')
+      : (success ? 'Quest succeeded (no FAIL cards).' : 'Quest failed (at least one FAIL card).');
+    state.pendingQuestResult = { success, reasonText };
+
+    const revealDuration = 300 + cards.length * 650 + 400;
     setTimeout(() => {
-      const reasonText = needs2
-        ? (success ? 'Quest succeeded (fewer than 2 FAIL cards).' : 'Quest failed (2+ FAIL cards).')
-        : (success ? 'Quest succeeded (no FAIL cards).' : 'Quest failed (at least one FAIL card).');
-      resolveQuestResult(success, reasonText);
+      btnRevealContinue.disabled = false;
     }, revealDuration);
   }
 
@@ -923,6 +941,7 @@
     state.missionFailCount = 0;
     state.missionCards = [];
     state.questPhase = 'proposal';
+    state.pendingQuestResult = null;
     state.currentLeaderIndex = null;
     state.usedApprovedLeaders = [];
     state.currentQuestLeaders = [];
@@ -985,7 +1004,11 @@
 
   function showRevealStep() {
     const i = state.revealIndex;
-    revealStep.textContent = `Hand phone to: ${state.players[i]} (Player ${i+1} of ${state.nPlayers})`;
+    revealStep.innerHTML = '';
+    const nameEl = document.createElement('span');
+    nameEl.className = 'revealName';
+    nameEl.textContent = state.players[i];
+    revealStep.append('Hand phone to: ', nameEl, ` (Player ${i+1} of ${state.nPlayers})`);
     roleDisplay.classList.add('hidden');
     btnShowRole.classList.remove('hidden');
     btnHideRole.classList.add('hidden');
@@ -1089,6 +1112,12 @@
     const needs2 = questNeedsTwoFails(state.nPlayers, state.currentQuest);
     const success = needs2 ? state.missionFailCount < 2 : state.missionFailCount === 0;
     showMissionReveal(success, needs2);
+  });
+  btnRevealContinue.addEventListener('click', () => {
+    if (!state.pendingQuestResult) return;
+    const { success, reasonText } = state.pendingQuestResult;
+    state.pendingQuestResult = null;
+    resolveQuestResult(success, reasonText);
   });
 
   btnAssassinConfirm.addEventListener('click', resolveAssassination);
