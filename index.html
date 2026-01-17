@@ -195,6 +195,7 @@
       <div class="divider"></div>
       <button id="btnShowAllRoles" class="secondary hidden">Show all roles (host view)</button>
       <div id="allRoles" class="hidden" style="margin-top:10px;"></div>
+      <div id="debugLeaderPool" class="muted hidden" style="margin-top:10px;"></div>
   </div>
 
   <div class="card hidden" id="missionRevealArea">
@@ -203,13 +204,15 @@
     <div id="missionRevealContainer" class="revealContainer"></div>
     <div class="muted" id="missionRevealNote" style="margin-top:6px;"></div>
     <div style="margin-top:16px;">
-      <button id="btnRevealContinue" class="secondary" style="width:100%;" disabled>Go to next quest</button>
+      <button id="btnRevealContinue" class="secondary" style="width:100%;" disabled>Go To Next Quest</button>
     </div>
   </div>
 </div>
 
 <script>
   // ---------- Utilities ----------
+  const DEBUG_LEADERS = false;
+
   function shuffle(arr) {
     for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -279,7 +282,9 @@
     questPhase: 'proposal', // 'proposal' | 'vote' | 'mission'
     currentLeaderIndex: null,
     usedApprovedLeaders: [],
-    currentQuestLeaders: []
+    usedQuestLeaders: [],
+    currentQuestLeaders: [],
+    debugEligibleLeaders: []
   };
 
   // ---------- Elements ----------
@@ -339,6 +344,7 @@
 
   const btnShowAllRoles = document.getElementById('btnShowAllRoles');
   const allRoles = document.getElementById('allRoles');
+  const debugLeaderPool = document.getElementById('debugLeaderPool');
 
   // role checkboxes
   const roleMerlin = document.getElementById('roleMerlin');
@@ -564,23 +570,61 @@
     return sizes[state.currentQuest] || sizes[sizes.length - 1];
   }
 
-  function pickNewLeader(options = {}) {
-    const { exclude = [], avoidUsedAcross = false } = options;
-    if (!state.players.length) return null;
+  function getEligibleLeaders(exclude = [], avoidUsedAcross = false) {
+    if (!state.players.length) return [];
     const excludeSet = new Set(exclude);
     let candidates = state.players.map((_, i) => i).filter(i => !excludeSet.has(i));
+    if (!avoidUsedAcross) return candidates;
 
-    if (avoidUsedAcross) {
-      const usedSet = new Set(state.usedApprovedLeaders);
-      const filtered = candidates.filter(i => !usedSet.has(i));
-      if (filtered.length) candidates = filtered;
-    }
+    const usedCycleSet = new Set(state.usedQuestLeaders);
+    const unused = candidates.filter(i => !usedCycleSet.has(i));
+    return unused.length ? unused : candidates;
+  }
 
-    if (!candidates.length) {
-      candidates = state.players.map((_, i) => i).filter(i => !excludeSet.has(i));
+  function pickNewLeader(options = {}) {
+    const { exclude = [], avoidUsedAcross = false } = options;
+    const eligible = getEligibleLeaders(exclude, avoidUsedAcross);
+    state.debugEligibleLeaders = eligible;
+    if (!eligible.length) return null;
+    return eligible[Math.floor(Math.random() * eligible.length)];
+  }
+
+  function renderLeaderDebug(exclude = []) {
+    if (!DEBUG_LEADERS || !debugLeaderPool) return;
+    debugLeaderPool.classList.remove('hidden');
+    const names = (idxs) => idxs.map(i => state.players[i]).join(', ') || 'None';
+    const usedCycleSet = new Set(state.usedQuestLeaders);
+    const allUsedOnce = usedCycleSet.size >= state.players.length;
+    const approvedSet = new Set(state.usedApprovedLeaders);
+    const excludeSet = new Set(exclude);
+    debugLeaderPool.innerHTML =
+      `<b>Leader debug</b><br>` +
+      `Round: ${state.leaderRound}<br>` +
+      `Round complete: ${state.leaderRoundComplete ? 'yes' : 'no'}<br>` +
+      `Eligible: ${names(state.debugEligibleLeaders)}<br>` +
+      `Used (round ${state.leaderRound}): ${names([...usedCycleSet])}<br>` +
+      `Approved leaders: ${names([...approvedSet])}<br>` +
+      `Exclude this quest: ${names([...excludeSet])}<br>` +
+      `All used once: ${allUsedOnce ? 'yes' : 'no'}`;
+  }
+
+  function maybeStartNewLeaderRound() {
+    if (!state.leaderRoundComplete) return;
+    state.usedQuestLeaders = [];
+    state.leaderRoundComplete = false;
+    state.leaderRound += 1;
+  }
+
+  function assignNewLeader(exclude = []) {
+    const leader = pickNewLeader({ exclude, avoidUsedAcross: true });
+    state.currentLeaderIndex = leader;
+    if (leader === null) return;
+    if (!state.currentQuestLeaders.includes(leader)) state.currentQuestLeaders.push(leader);
+    if (!state.usedQuestLeaders.includes(leader)) state.usedQuestLeaders.push(leader);
+    if (state.usedQuestLeaders.length >= state.players.length) {
+      state.leaderRoundComplete = true;
     }
-    if (!candidates.length) return null;
-    return candidates[Math.floor(Math.random() * candidates.length)];
+    renderLeaderDebug(exclude);
   }
 
   function updateQuestStatusText(customText) {
@@ -690,9 +734,8 @@
     state.pendingQuestResult = null;
     state.questPhase = 'proposal';
     state.currentQuestLeaders = [];
-    const leader = pickNewLeader({ avoidUsedAcross: true });
-    state.currentLeaderIndex = leader;
-    if (leader !== null) state.currentQuestLeaders.push(leader);
+    maybeStartNewLeaderRound();
+    assignNewLeader();
     missionRevealArea.classList.add('hidden');
     missionRevealContainer.innerHTML = '';
     missionRevealNote.textContent = '';
@@ -722,11 +765,7 @@
       }
       state.currentProposal = [];
       state.questPhase = 'proposal';
-      const newLeader = pickNewLeader({ exclude: state.currentQuestLeaders, avoidUsedAcross: true });
-      state.currentLeaderIndex = newLeader;
-      if (newLeader !== null) {
-        state.currentQuestLeaders.push(newLeader);
-      }
+      assignNewLeader(state.currentQuestLeaders);
       renderProposalState();
       return;
     }
@@ -902,7 +941,7 @@
     missionRevealContainer.innerHTML = '';
     btnRevealContinue.disabled = true;
     const cards = shuffle([...state.missionCards]);
-    missionRevealTitle.textContent = `Quest ${state.currentQuest+1} results:`;
+    // missionRevealTitle.textContent = `Quest ${state.currentQuest+1} results:`;
     missionRevealNote.textContent = 'Cards revealed in random order for suspense.';
 
     sizeRevealCards(cards.length);
@@ -969,7 +1008,10 @@
     state.questPhase = 'proposal';
     state.pendingQuestResult = null;
     state.currentLeaderIndex = null;
+    state.leaderRound = 1;
+    state.leaderRoundComplete = false;
     state.usedApprovedLeaders = [];
+    state.usedQuestLeaders = [];
     state.currentQuestLeaders = [];
 
     setupCard.classList.remove('hidden');
@@ -989,6 +1031,7 @@
     delete roleMordred.dataset.manual;
     allRoles.classList.add('hidden');
     allRoles.innerHTML = '';
+    if (debugLeaderPool) debugLeaderPool.classList.add('hidden');
 
     endgameArea.classList.add('hidden');
     assassinArea.classList.add('hidden');
@@ -1016,7 +1059,6 @@
     state.players = parsePlayers(n);
     state.roles = buildRoles(n, flags);
     state.started = true;
-    resetQuestFlowForCurrentQuest();
     setHostControlsVisibility();
 
     // Reveal UI
