@@ -29,7 +29,7 @@
     button:not(:disabled):hover { transform: translateY(-1px); }
     .pill { display:inline-block; padding: 6px 10px; border-radius: 999px; background: rgba(124,93,250,0.16); margin: 6px 6px 0 0; font-size: 13px; color: #e8edf7; border: 1px solid rgba(124,93,250,0.35); }
     .muted { color:#9aa6c4; font-size: 13px; }
-    .leaderLine { display:block; font-size:16px; font-weight:700; color:#f3f6ff; margin-top:4px; }
+    .leaderLine { display:block; font-size:16px; font-weight:700; color:#f6d36c; margin-top:4px; }
     .nameHighlight { font-weight: 800; color: #7c5dfa; font-size: 18px; }
     .missionName { font-weight: 800; font-size: 22px; color: #f3f6ff; }
     .center { text-align:center; }
@@ -38,6 +38,7 @@
     .questBox { padding: 12px; border-radius: 14px; background:#0f192c; text-align:center; border: 1px solid rgba(255,255,255,0.06); color: #e8edf7; }
     .good { background: rgba(157,227,177,0.18); border-color: rgba(157,227,177,0.55); color: #d8ffe7; }
     .evil { background: rgba(244,183,183,0.18); border-color: rgba(244,183,183,0.55); color: #ffe3e3; }
+    .currentStatus { color: #f6d36c; }
     .hidden { display:none; }
     .teamPicker { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px; margin-top:4px; }
     .teamPicker .checkbox { margin: 2px 0; gap: 6px; padding: 4px 6px; font-size: 14px; background: #0f192c; border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; color: #e8edf7; }
@@ -57,6 +58,7 @@
     .revealCard.fail { background:#332126; color:#ffd7d7; border-color: rgba(244,183,183,0.6); }
     .checkbox { display:flex; align-items:center; gap: 8px; margin: 6px 0; color: #e8edf7; }
     .checkbox input { width: 18px; height: 18px; }
+    .missionChoice.selected { box-shadow: 0 0 0 4px rgba(255,215,120,0.95), 0 0 12px rgba(255,215,120,0.55); }
     /* Compact overrides for proposal picker */
     .teamPicker .checkbox { margin: 1px 0; gap: 4px; padding: 2px 3px; font-size: 14px; }
     .teamPicker .checkbox input { width: 14px; height: 14px; }
@@ -68,6 +70,9 @@
     .topBar { display:flex; justify-content:space-between; align-items:center; gap: 10px; }
     .linkbtn { background: transparent; color:#b6c4ff; padding: 0; text-decoration: underline; font-size: 14px; }
     .revealName { font-size: 20px; font-weight: 800; color: #ffffff; }
+    .ladyResult { margin-top: 12px; padding: 14px; border-radius: 14px; text-align: center; font-weight: 800; letter-spacing: .3px; }
+    .ladyResult.good { background: rgba(157,227,177,0.18); border: 1px solid rgba(157,227,177,0.55); color: #d8ffe7; }
+    .ladyResult.evil { background: rgba(244,183,183,0.18); border: 1px solid rgba(244,183,183,0.55); color: #ffe3e3; }
 
   </style>
 </head>
@@ -107,6 +112,9 @@
       <div class="checkbox"><input id="roleMordred" type="checkbox"><label for="roleMordred">Mordred (Evil, hidden from Merlin)</label></div>
 
       <div class="divider"></div>
+      <div class="checkbox"><input id="ladyEnabled" type="checkbox" checked><label for="ladyEnabled">Lady of the Lake (7+ players)</label></div>
+
+      <div class="divider"></div>
       <button id="btnStart">Start game</button>
       <div class="muted" id="setupHint" style="margin-top:10px;"></div>
     </div>
@@ -126,7 +134,7 @@
     <div class="center" style="margin-top:12px;">
       <button id="btnShowRole" class="secondary">Show role</button>
       <button id="btnHideRole" class="secondary hidden">Hide</button>
-      <button id="btnNextPlayer" disabled>Next player</button>
+      <button id="btnNextPlayer" class="hidden" disabled>I understood my role</button>
     </div>
   </div>
 
@@ -159,8 +167,11 @@
     <div id="missionPrompt"></div>
     <div class="muted" id="missionFailRule" style="margin-top:4px;"></div>
     <div class="row" style="margin-top:8px;">
-      <button id="btnCardPass" class="secondary" style="flex:1;">PASS</button>
-      <button id="btnCardFail" class="danger" style="flex:1;">FAIL</button>
+      <button id="btnCardPass" class="secondary missionChoice" style="flex:1;">PASS</button>
+      <button id="btnCardFail" class="danger missionChoice" style="flex:1;">FAIL</button>
+    </div>
+    <div style="margin-top:10px;">
+      <button id="btnSubmitMission" class="secondary hidden" style="width:100%;">Submit</button>
     </div>
   </div>
   <div id="missionRevealAction" class="hidden" style="margin-top:10px;">
@@ -205,6 +216,22 @@
     <div class="muted" id="missionRevealNote" style="margin-top:6px;"></div>
     <div style="margin-top:16px;">
       <button id="btnRevealContinue" class="secondary" style="width:100%;" disabled>Go To Next Quest</button>
+    </div>
+  </div>
+
+  <div class="card hidden" id="ladyCard">
+    <h2>Lady of the Lake</h2>
+    <div class="muted" id="ladyIntro"></div>
+    <div class="big center" id="ladyHolderName" style="margin-top:6px;"></div>
+    <div class="divider"></div>
+    <label for="ladyTarget">Choose a player to inspect</label>
+    <select id="ladyTarget"></select>
+    <div style="margin-top:10px;">
+      <button id="btnLadyReveal" class="secondary" style="width:100%;">Show loyalty</button>
+    </div>
+    <div id="ladyResult" class="ladyResult hidden"></div>
+    <div style="margin-top:16px;">
+      <button id="btnLadyContinue" class="secondary" style="width:100%;" disabled>Continue to next quest</button>
     </div>
   </div>
 </div>
@@ -278,13 +305,18 @@
     missionFailCount: 0,
     missionCards: [],
     missionRevealReady: false,
+    pendingMissionChoice: null,
     pendingQuestResult: null,
     questPhase: 'proposal', // 'proposal' | 'vote' | 'mission'
     currentLeaderIndex: null,
     usedApprovedLeaders: [],
     usedQuestLeaders: [],
     currentQuestLeaders: [],
-    debugEligibleLeaders: []
+    debugEligibleLeaders: [],
+    ladyHolderIndex: null,
+    ladySeen: [],
+    ladyTargetIndex: null,
+    ladyHolders: []
   };
 
   // ---------- Elements ----------
@@ -326,11 +358,19 @@
   const missionRevealContainer = document.getElementById('missionRevealContainer');
   const missionRevealNote = document.getElementById('missionRevealNote');
   const btnRevealContinue = document.getElementById('btnRevealContinue');
+  const ladyCard = document.getElementById('ladyCard');
+  const ladyIntro = document.getElementById('ladyIntro');
+  const ladyHolderName = document.getElementById('ladyHolderName');
+  const ladyTarget = document.getElementById('ladyTarget');
+  const btnLadyReveal = document.getElementById('btnLadyReveal');
+  const ladyResult = document.getElementById('ladyResult');
+  const btnLadyContinue = document.getElementById('btnLadyContinue');
   const btnSubmitProposal = document.getElementById('btnSubmitProposal');
   const btnVoteApprove = document.getElementById('btnVoteApprove');
   const btnVoteReject = document.getElementById('btnVoteReject');
   const btnCardPass = document.getElementById('btnCardPass');
   const btnCardFail = document.getElementById('btnCardFail');
+  const btnSubmitMission = document.getElementById('btnSubmitMission');
   const statusText = document.getElementById('statusText');
   const scoreText = document.getElementById('scoreText');
 
@@ -353,6 +393,7 @@
   const roleMorgana = document.getElementById('roleMorgana');
   const roleOberon = document.getElementById('roleOberon');
   const roleMordred = document.getElementById('roleMordred');
+  const ladyEnabledEl = document.getElementById('ladyEnabled');
 
   function autoSelectRecommendedRoles(n) {
     // Recommend Morgana automatically, but leave room for user overrides. Default for 6-player games: neither Percival nor Morgana pre-selected.
@@ -640,6 +681,101 @@
     statusText.textContent = `Quest ${state.currentQuest+1} — ${detail || 'not decided'}`;
   }
 
+  function ladyEnabled() {
+    return state.nPlayers >= 7 && !!(ladyEnabledEl && ladyEnabledEl.checked);
+  }
+
+  function shouldTriggerLady(completedQuestIndex) {
+    return ladyEnabled() && completedQuestIndex >= 1 && completedQuestIndex <= 3;
+  }
+
+  function getLadyEligibleTargets() {
+    const seenSet = new Set(state.ladySeen);
+    const holderSet = new Set(state.ladyHolders);
+    return state.players
+      .map((_, i) => i)
+      .filter(i => i !== state.ladyHolderIndex && !seenSet.has(i) && !holderSet.has(i));
+  }
+
+  function populateLadyTargets() {
+    ladyTarget.innerHTML = '';
+    const eligible = getLadyEligibleTargets();
+    btnLadyReveal.disabled = true;
+    if (!eligible.length) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'No eligible players';
+      ladyTarget.appendChild(opt);
+      ladyTarget.disabled = true;
+      btnLadyContinue.disabled = false;
+      return;
+    }
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Select a player';
+    placeholder.selected = true;
+    placeholder.disabled = true;
+    ladyTarget.appendChild(placeholder);
+    ladyTarget.disabled = false;
+    eligible.forEach(i => {
+      const opt = document.createElement('option');
+      opt.value = String(i);
+      opt.textContent = state.players[i];
+      ladyTarget.appendChild(opt);
+    });
+  }
+
+  function showLadyOfLake() {
+    if (!ladyEnabled()) return false;
+    if (state.ladyHolderIndex === null && state.players.length) {
+      state.ladyHolderIndex = Math.floor(Math.random() * state.players.length);
+    }
+    if (state.ladyHolderIndex !== null && !state.ladyHolders.includes(state.ladyHolderIndex)) {
+      state.ladyHolders.push(state.ladyHolderIndex);
+    }
+    state.ladyTargetIndex = null;
+    const holderName = state.players[state.ladyHolderIndex] || 'Unknown';
+    ladyIntro.textContent = `Pass phone to ${holderName}. Choose a player to inspect, then hand the phone to that player and tap "Show loyalty".`;
+    ladyHolderName.textContent = `Holder: ${holderName}`;
+    ladyResult.classList.add('hidden');
+    ladyResult.classList.remove('good', 'evil');
+    btnLadyContinue.disabled = true;
+    populateLadyTargets();
+    gameCard.classList.add('hidden');
+    ladyCard.classList.remove('hidden');
+    return true;
+  }
+
+  function revealLadyLoyalty() {
+    if (ladyTarget.disabled) return;
+    if (!ladyTarget.value) return;
+    const targetIdx = Number(ladyTarget.value);
+    if (!Number.isFinite(targetIdx)) return;
+    state.ladyTargetIndex = targetIdx;
+    const targetName = state.players[targetIdx];
+    const team = state.roles[targetIdx].team;
+    ladyResult.textContent = `${targetName} is ${team}. Lady passes to ${targetName}.`;
+    ladyResult.classList.toggle('good', team === 'Good');
+    ladyResult.classList.toggle('evil', team === 'Evil');
+    ladyResult.classList.remove('hidden');
+    btnLadyContinue.disabled = false;
+    btnLadyReveal.disabled = true;
+    ladyTarget.disabled = true;
+  }
+
+  function continueAfterLady() {
+    if (state.ladyTargetIndex !== null) {
+      const target = state.ladyTargetIndex;
+      if (!state.ladySeen.includes(target)) state.ladySeen.push(target);
+      state.ladyHolderIndex = target;
+      if (!state.ladyHolders.includes(target)) state.ladyHolders.push(target);
+    }
+    ladyCard.classList.add('hidden');
+    gameCard.classList.remove('hidden');
+    resetQuestFlowForCurrentQuest();
+    disableQuestButtons(false);
+  }
+
   function renderTeamPicker() {
     const teamSize = currentQuestTeamSize();
     teamPicker.innerHTML = '';
@@ -732,6 +868,7 @@
     state.missionCards = [];
     state.missionRevealReady = false;
     state.pendingQuestResult = null;
+    state.pendingMissionChoice = null;
     state.questPhase = 'proposal';
     state.currentQuestLeaders = [];
     maybeStartNewLeaderRound();
@@ -778,6 +915,7 @@
     state.missionFailCount = 0;
     state.missionCards = [];
     state.missionRevealReady = false;
+    state.pendingMissionChoice = null;
     state.pendingQuestResult = null;
     renderProposalState();
   }
@@ -793,12 +931,37 @@
     const needs2 = questNeedsTwoFails(state.nPlayers, state.currentQuest);
     missionFailRule.textContent = needs2 ? 'Quest fails only if 2 FAIL cards are played.' : 'Quest fails if any FAIL card is played.';
     if (idx >= team.length) return;
+    state.pendingMissionChoice = null;
+    btnSubmitMission.classList.add('hidden');
+    btnSubmitMission.disabled = true;
+    btnCardPass.classList.remove('selected');
+    btnCardFail.classList.remove('selected');
+    btnCardPass.disabled = false;
+    btnCardFail.disabled = false;
     const playerName = state.players[team[idx]];
     missionPrompt.innerHTML = `Hand phone to <span class="missionName">${playerName}</span><br><br>(team member ${idx+1} of ${team.length}).<br><br>Choose PASS or FAIL secretly.`;
   }
 
   function handleMissionCard(isPass) {
     if (state.ended || state.questPhase !== 'mission') return;
+    state.pendingMissionChoice = isPass;
+    btnCardPass.classList.toggle('selected', isPass === true);
+    btnCardFail.classList.toggle('selected', isPass === false);
+    btnSubmitMission.classList.remove('hidden');
+    btnSubmitMission.disabled = false;
+  }
+
+  function submitMissionChoice() {
+    if (state.ended || state.questPhase !== 'mission') return;
+    if (state.pendingMissionChoice === null) return;
+    const isPass = state.pendingMissionChoice;
+    state.pendingMissionChoice = null;
+    btnSubmitMission.disabled = true;
+    btnSubmitMission.classList.add('hidden');
+    btnCardPass.classList.remove('selected');
+    btnCardFail.classList.remove('selected');
+    btnCardPass.disabled = true;
+    btnCardFail.disabled = true;
     state.missionCards.push(isPass);
     if (!isPass) state.missionFailCount += 1;
     state.missionStepIndex += 1;
@@ -809,14 +972,13 @@
       missionFailRule.textContent = '';
       missionPrompt.textContent = 'All cards submitted. Tap "Show the results" to reveal.';
       missionRevealAction.classList.remove('hidden');
-      btnCardPass.disabled = true;
-      btnCardFail.disabled = true;
       return;
     }
     renderMissionStep();
   }
 
   function resolveQuestResult(resultSuccess, reasonText) {
+    const completedQuestIndex = state.currentQuest;
     state.questResults[state.currentQuest] = resultSuccess;
     state.pendingQuestResult = null;
     missionRevealArea.classList.add('hidden');
@@ -831,6 +993,10 @@
     updateScoreAndStatus();
     if (!state.ended) {
       if (reasonText) updateQuestStatusText(reasonText);
+      if (shouldTriggerLady(completedQuestIndex)) {
+        showLadyOfLake();
+        return;
+      }
       resetQuestFlowForCurrentQuest();
       disableQuestButtons(false);
     } else if (reasonText) {
@@ -865,6 +1031,7 @@
       status.style.fontWeight = '700';
       status.textContent = (res === null) ? (q === state.currentQuest ? 'Current' : 'Pending')
         : (res ? 'SUCCESS' : 'FAIL');
+      if (res === null && q === state.currentQuest) status.classList.add('currentStatus');
 
       box.appendChild(title);
       box.appendChild(sub);
@@ -914,7 +1081,7 @@
   }
 
   function disableQuestButtons(disabled) {
-    [btnSubmitProposal, btnVoteApprove, btnVoteReject, btnCardPass, btnCardFail].forEach(btn => {
+    [btnSubmitProposal, btnVoteApprove, btnVoteReject, btnCardPass, btnCardFail, btnSubmitMission].forEach(btn => {
       btn.disabled = disabled;
     });
     btnShowReveal.disabled = disabled;
@@ -1007,12 +1174,17 @@
     state.missionCards = [];
     state.questPhase = 'proposal';
     state.pendingQuestResult = null;
+    state.pendingMissionChoice = null;
     state.currentLeaderIndex = null;
     state.leaderRound = 1;
     state.leaderRoundComplete = false;
     state.usedApprovedLeaders = [];
     state.usedQuestLeaders = [];
     state.currentQuestLeaders = [];
+    state.ladyHolderIndex = null;
+    state.ladySeen = [];
+    state.ladyTargetIndex = null;
+    state.ladyHolders = [];
 
     setupCard.classList.remove('hidden');
     revealCard.classList.add('hidden');
@@ -1021,6 +1193,7 @@
     roleDisplay.classList.add('hidden');
     btnShowRole.classList.remove('hidden');
     btnHideRole.classList.add('hidden');
+    btnNextPlayer.classList.add('hidden');
     btnNextPlayer.disabled = true;
 
     delete roleMerlin.dataset.manual;
@@ -1042,6 +1215,8 @@
     missionRevealArea.classList.add('hidden');
     missionRevealContainer.innerHTML = '';
     missionRevealNote.textContent = '';
+    ladyCard.classList.add('hidden');
+    ladyResult.classList.add('hidden');
     renderProposalState();
   }
 
@@ -1059,6 +1234,12 @@
     state.players = parsePlayers(n);
     state.roles = buildRoles(n, flags);
     state.started = true;
+    state.ladyHolderIndex = (ladyEnabled() && state.players.length)
+      ? Math.floor(Math.random() * state.players.length)
+      : null;
+    state.ladySeen = [];
+    state.ladyTargetIndex = null;
+    state.ladyHolders = (state.ladyHolderIndex !== null) ? [state.ladyHolderIndex] : [];
     setHostControlsVisibility();
 
     // Reveal UI
@@ -1080,6 +1261,7 @@
     roleDisplay.classList.add('hidden');
     btnShowRole.classList.remove('hidden');
     btnHideRole.classList.add('hidden');
+    btnNextPlayer.classList.add('hidden');
     btnNextPlayer.disabled = true;
   }
 
@@ -1093,6 +1275,7 @@
     roleDisplay.classList.remove('hidden');
     btnShowRole.classList.add('hidden');
     btnHideRole.classList.remove('hidden');
+    btnNextPlayer.classList.remove('hidden');
     btnNextPlayer.disabled = false;
   }
 
@@ -1100,6 +1283,7 @@
     roleDisplay.classList.add('hidden');
     btnShowRole.classList.remove('hidden');
     btnHideRole.classList.add('hidden');
+    btnNextPlayer.classList.add('hidden');
     btnNextPlayer.disabled = true;
   }
 
@@ -1176,6 +1360,7 @@
   btnVoteReject.addEventListener('click', () => handleVoteResult(false));
   btnCardPass.addEventListener('click', () => handleMissionCard(true));
   btnCardFail.addEventListener('click', () => handleMissionCard(false));
+  btnSubmitMission.addEventListener('click', submitMissionChoice);
   btnShowReveal.addEventListener('click', () => {
     const needs2 = questNeedsTwoFails(state.nPlayers, state.currentQuest);
     const success = needs2 ? state.missionFailCount < 2 : state.missionFailCount === 0;
@@ -1187,6 +1372,11 @@
     state.pendingQuestResult = null;
     resolveQuestResult(success, reasonText);
   });
+  ladyTarget.addEventListener('change', () => {
+    btnLadyReveal.disabled = !ladyTarget.value;
+  });
+  btnLadyReveal.addEventListener('click', revealLadyLoyalty);
+  btnLadyContinue.addEventListener('click', continueAfterLady);
 
   btnAssassinConfirm.addEventListener('click', resolveAssassination);
 
