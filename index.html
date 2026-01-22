@@ -58,6 +58,8 @@
     .revealCard.fail { background:#332126; color:#ffd7d7; border-color: rgba(244,183,183,0.6); }
     .checkbox { display:flex; align-items:center; gap: 8px; margin: 6px 0; color: #e8edf7; }
     .checkbox input { width: 18px; height: 18px; }
+    .subOption { margin-left: 18px; }
+    .subOption label { color: #b7c3df; font-size: 12px; }
     .missionChoice.selected { box-shadow: 0 0 0 4px rgba(255,215,120,0.95), 0 0 12px rgba(255,215,120,0.55); }
     /* Compact overrides for proposal picker */
     .teamPicker .checkbox { margin: 1px 0; gap: 4px; padding: 2px 3px; font-size: 14px; }
@@ -107,7 +109,11 @@
 
       <div class="checkbox"><input id="roleAssassin" type="checkbox" checked><label for="roleAssassin">Assassin (Evil)</label></div>
       <div class="checkbox"><input id="roleMorgana" type="checkbox"><label for="roleMorgana">Morgana (Evil)</label></div>
-      <div class="checkbox"><input id="roleOberon" type="checkbox"><label for="roleOberon">Oberon (Evil, hidden from evil)</label></div>
+      <div class="checkbox"><input id="roleOberon" type="checkbox"><label for="roleOberon">Oberon (Evil)</label></div>
+      <div id="oberonOptions" class="hidden">
+        <div class="checkbox subOption"><input id="oberonHidden" type="checkbox" checked><label for="oberonHidden">Oberon is Hidden from other Evils</label></div>
+        <div class="checkbox subOption"><input id="oberonBlind" type="checkbox" checked><label for="oberonBlind">Oberon does not know other Evils</label></div>
+      </div>
 
       <div class="checkbox"><input id="roleMordred" type="checkbox"><label for="roleMordred">Mordred (Evil, hidden from Merlin)</label></div>
 
@@ -313,6 +319,8 @@
     usedQuestLeaders: [],
     currentQuestLeaders: [],
     debugEligibleLeaders: [],
+    oberonHiddenFromEvils: true,
+    oberonDoesNotKnowEvils: true,
     ladyHolderIndex: null,
     ladySeen: [],
     ladyTargetIndex: null,
@@ -393,6 +401,9 @@
   const roleMorgana = document.getElementById('roleMorgana');
   const roleOberon = document.getElementById('roleOberon');
   const roleMordred = document.getElementById('roleMordred');
+  const oberonHiddenEl = document.getElementById('oberonHidden');
+  const oberonBlindEl = document.getElementById('oberonBlind');
+  const oberonOptions = document.getElementById('oberonOptions');
   const ladyEnabledEl = document.getElementById('ladyEnabled');
 
   function autoSelectRecommendedRoles(n) {
@@ -449,6 +460,16 @@
     if (!allowed && roleOberon.checked) {
       roleOberon.checked = false;
     }
+    const subDisabled = !allowed || !roleOberon.checked;
+    oberonHiddenEl.disabled = subDisabled;
+    oberonBlindEl.disabled = subDisabled;
+    if (oberonOptions) {
+      if (subDisabled) {
+        oberonOptions.classList.add('hidden');
+      } else {
+        oberonOptions.classList.remove('hidden');
+      }
+    }
   }
 
   function updateSetupHint() {
@@ -478,6 +499,8 @@
       morgana: roleMorgana.checked,
       oberon: roleOberon.checked,
       mordred: roleMordred.checked,
+      oberonHiddenFromEvils: roleOberon.checked && oberonHiddenEl.checked,
+      oberonDoesNotKnowEvils: roleOberon.checked && oberonBlindEl.checked,
       evilSpecialCount() {
         return (this.assassin?1:0) + (this.morgana?1:0) + (this.oberon?1:0) + (this.mordred?1:0);
       },
@@ -508,7 +531,19 @@
     const evil = [];
     if (flags.assassin) evil.push(makeRole('Assassin', 'Evil', 'You are Evil. At the end, if Good wins 3 quests, you may guess Merlin.'));
     if (flags.morgana) evil.push(makeRole('Morgana', 'Evil', 'You appear as Merlin to Percival.'));
-    if (flags.oberon) evil.push(makeRole('Oberon', 'Evil', 'You are Evil, but you do NOT know the other Evil players, and they do not know you.'));
+    if (flags.oberon) {
+      let oberonBlurb = 'You are Evil.';
+      if (flags.oberonHiddenFromEvils && flags.oberonDoesNotKnowEvils) {
+        oberonBlurb = 'You are Evil, but you do NOT know the other Evil players, and they do not know you.';
+      } else if (flags.oberonHiddenFromEvils && !flags.oberonDoesNotKnowEvils) {
+        oberonBlurb = 'You are Evil. You know the other Evil players, but they do NOT know you.';
+      } else if (!flags.oberonHiddenFromEvils && flags.oberonDoesNotKnowEvils) {
+        oberonBlurb = 'You are Evil. You do NOT know the other Evil players, but they know you.';
+      } else {
+        oberonBlurb = 'You are Evil. You know the other Evil players, and they know you.';
+      }
+      evil.push(makeRole('Oberon', 'Evil', oberonBlurb));
+    }
     if (flags.mordred) evil.push(makeRole('Mordred', 'Evil', 'Merlin does NOT see you as Evil.'));
 
     // Ensure at least one evil exists (classic requires evil minions)
@@ -558,13 +593,16 @@
     const evilNames = evilIdxs.map(i => state.players[i]);
     const evilRoles = evilIdxs.map(i => state.roles[i].name);
     const oberonInGame = state.roles.some(r => r.name === 'Oberon');
+    const oberonHiddenFromEvils = state.oberonHiddenFromEvils;
+    const oberonDoesNotKnowEvils = state.oberonDoesNotKnowEvils;
     const mordredInGame = state.roles.some(r => r.name === 'Mordred');
     const highlightName = (name) => `<span class="nameHighlight">${name}</span>`;
 
-    // Helper: "known evil to evil (except Oberon)".
+    // Helper: should an evil player see this evil?
     function evilKnownToEvil(i) {
       const role = state.roles[i].name;
-      return role !== 'Oberon';
+      if (role === 'Oberon' && oberonHiddenFromEvils) return false;
+      return true;
     }
 
     // Merlin sees evil except Mordred
@@ -593,13 +631,21 @@
     // Evil (except Oberon) sees other evil (except Oberon)
     if (me.team === 'Evil') {
       if (me.name === 'Oberon') {
-        return `You are Evil, but you do not know the other Evil players.`;
+        if (oberonDoesNotKnowEvils) {
+          return `You are Evil, but you do not know the other Evil players.`;
+        }
+        const knownEvil = evilIdxs
+          .filter(i => i !== playerIndex)
+          .map(i => highlightName(state.players[i]));
+        return `Other Evils known to you:\n ${knownEvil.length ? knownEvil.join('\n') : 'None'}`;
       }
       const knownEvil = evilIdxs
         .filter(i => i !== playerIndex)
         .filter(i => evilKnownToEvil(i))
         .map(i => highlightName(state.players[i]));
-      const oberonNote = (state.nPlayers >= 10 && oberonInGame) ? '\nNote: Oberon is in this game; you do NOT know him/her.' : '';
+      const oberonNote = (state.nPlayers >= 10 && oberonInGame && oberonHiddenFromEvils)
+        ? '\nNote: Oberon is in this game; you do NOT know him/her.'
+        : '';
       return `Other Evils known to you:\n ${knownEvil.length ? knownEvil.join('\n') : 'None'}\n${oberonNote}`;
     }
 
@@ -1185,6 +1231,8 @@
     state.ladySeen = [];
     state.ladyTargetIndex = null;
     state.ladyHolders = [];
+    state.oberonHiddenFromEvils = true;
+    state.oberonDoesNotKnowEvils = true;
 
     setupCard.classList.remove('hidden');
     revealCard.classList.add('hidden');
@@ -1202,6 +1250,8 @@
     delete roleAssassin.dataset.manual;
     delete roleOberon.dataset.manual;
     delete roleMordred.dataset.manual;
+    if (oberonHiddenEl) oberonHiddenEl.checked = true;
+    if (oberonBlindEl) oberonBlindEl.checked = true;
     allRoles.classList.add('hidden');
     allRoles.innerHTML = '';
     if (debugLeaderPool) debugLeaderPool.classList.add('hidden');
@@ -1233,6 +1283,8 @@
 
     state.players = parsePlayers(n);
     state.roles = buildRoles(n, flags);
+    state.oberonHiddenFromEvils = flags.oberonHiddenFromEvils;
+    state.oberonDoesNotKnowEvils = flags.oberonDoesNotKnowEvils;
     state.started = true;
     state.ladyHolderIndex = (ladyEnabled() && state.players.length)
       ? Math.floor(Math.random() * state.players.length)
@@ -1345,6 +1397,7 @@
       paired.dataset.manual = 'true';
       paired.checked = el.checked;
     }
+    enforceOberonLimit(clampPlayers(Number(numPlayersEl.value)));
     updateSetupHint();
   }));
 
