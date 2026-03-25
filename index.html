@@ -101,8 +101,12 @@
         <input id="numPlayers" type="number" min="5" max="14" value="7" />
       </div>
       <div style="flex:2; min-width: 240px;">
-        <label>Player names (optional, comma separated)</label>
-        <input id="playerNames" type="text" placeholder="Alex, Sam, ... (or leave blank)" />
+        <label>Player names (optional)</label>
+        <div style="display:flex; gap:6px;">
+          <input id="nameInput" type="text" placeholder="Type a name and press Add" style="flex:1;" />
+          <button id="btnAddName" type="button" class="secondary" style="padding:10px 14px; font-size:14px;">Add</button>
+        </div>
+        <div id="nameTags" style="display:flex; flex-wrap:wrap; gap:6px; min-height:36px; margin-top:8px;"></div>
       </div>
     </div>
 
@@ -339,7 +343,10 @@
   const gameCard = document.getElementById('gameCard');
 
   const numPlayersEl = document.getElementById('numPlayers');
-  const playerNamesEl = document.getElementById('playerNames');
+  const nameInput = document.getElementById('nameInput');
+  const btnAddName = document.getElementById('btnAddName');
+  const nameTags = document.getElementById('nameTags');
+  let playerNamesList = [];
   const setupHint = document.getElementById('setupHint');
 
   const btnStart = document.getElementById('btnStart');
@@ -516,16 +523,37 @@
     };
   }
 
+  function renderNameTags() {
+    nameTags.innerHTML = '';
+    playerNamesList.forEach((name, i) => {
+      const tag = document.createElement('span');
+      tag.className = 'pill';
+      tag.style.cursor = 'pointer';
+      tag.title = 'Tap to remove';
+      tag.textContent = name + ' ✕';
+      tag.addEventListener('click', () => {
+        playerNamesList.splice(i, 1);
+        renderNameTags();
+        updateSetupHint();
+      });
+      nameTags.appendChild(tag);
+    });
+  }
+
+  function addPlayerName() {
+    const name = nameInput.value.trim();
+    if (!name) return;
+    playerNamesList.push(name);
+    nameInput.value = '';
+    nameInput.focus();
+    renderNameTags();
+    updateSetupHint();
+  }
+
   function parsePlayers(n) {
-    const raw = playerNamesEl.value.trim();
-    let names = [];
-    if (raw.length > 0) {
-      names = raw.split(',').map(s => s.trim()).filter(Boolean);
-    }
-    // Fill or trim to n
     const players = [];
     for (let i = 0; i < n; i++) {
-      players.push(names[i] || `Player ${i+1}`);
+      players.push(playerNamesList[i] || `Player ${i+1}`);
     }
     return players;
   }
@@ -1407,6 +1435,8 @@
   }
 
   // ---------- Events ----------
+  btnAddName.addEventListener('click', addPlayerName);
+  nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') addPlayerName(); });
   numPlayersEl.addEventListener('input', updateSetupHint);
   [roleMerlin, rolePercival, roleAssassin, roleMorgana, roleOberon, roleMordred].forEach(el => el.addEventListener('change', () => {
     el.dataset.manual = 'true';
