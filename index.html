@@ -2,8 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Avalon</title>
+
+  <!-- PWA / iPhone home screen -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Avalon" />
+  <meta name="theme-color" content="#0d1429" />
   <style>
     * { box-sizing: border-box; }
     body { font-family: 'Inter', -apple-system, system-ui, sans-serif; margin: 0; background: #0d1429; color: #e8edf7; }
@@ -1328,7 +1334,19 @@
     btnShowRole.classList.add('hidden');
     btnHideRole.classList.remove('hidden');
     btnNextPlayer.classList.remove('hidden');
-    btnNextPlayer.disabled = false;
+    btnNextPlayer.disabled = true;
+    let remaining = 15;
+    btnNextPlayer.textContent = `I understood my role (${remaining}s)`;
+    const timer = setInterval(() => {
+      remaining -= 1;
+      if (remaining > 0) {
+        btnNextPlayer.textContent = `I understood my role (${remaining}s)`;
+      } else {
+        clearInterval(timer);
+        btnNextPlayer.disabled = false;
+        btnNextPlayer.textContent = `I understood my role`;
+      }
+    }, 1000);
   }
 
   function hideRole() {
@@ -1402,7 +1420,9 @@
   }));
 
   btnStart.addEventListener('click', startGame);
-  btnResetAll.addEventListener('click', resetAll);
+  btnResetAll.addEventListener('click', () => {
+    if (confirm('Reset everything and start over?')) resetAll();
+  });
 
   btnShowRole.addEventListener('click', showRole);
   btnHideRole.addEventListener('click', hideRole);
