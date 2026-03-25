@@ -132,6 +132,10 @@
 
       <div class="divider"></div>
       <button id="btnStart">Start game</button>
+      <div id="teamCount" style="margin-top:14px; font-size:22px; font-weight:800; display:flex; gap:20px; justify-content:center;">
+        <span id="goodCount" style="color:#6ee89a;"></span>
+        <span id="evilCount" style="color:#f47a7a;"></span>
+      </div>
       <div class="muted" id="setupHint" style="margin-top:10px;"></div>
     </div>
   </div>
@@ -494,6 +498,10 @@
     const selected = getSelectedRoleFlags();
     const fixedEvil = selected.evilSpecialCount(); // assassin + morgana + oberon + mordred
     const fixedGood = selected.goodSpecialCount(); // merlin + percival
+
+    const goodN = n - evilN;
+    document.getElementById('goodCount').textContent = `${goodN} Good`;
+    document.getElementById('evilCount').textContent = `${evilN} Evil`;
 
     setupHint.textContent =
       `Players: ${n}. Evil should be ${evilN}. Selected special roles: Good ${fixedGood}, Evil ${fixedEvil}. The rest will be plain Servants/Minions automatically.`;
@@ -1365,12 +1373,13 @@
     btnNextPlayer.disabled = true;
     let remaining = 15;
     btnNextPlayer.textContent = `I understood my role (${remaining}s)`;
-    const timer = setInterval(() => {
+    clearInterval(state.roleTimer);
+    state.roleTimer = setInterval(() => {
       remaining -= 1;
       if (remaining > 0) {
         btnNextPlayer.textContent = `I understood my role (${remaining}s)`;
       } else {
-        clearInterval(timer);
+        clearInterval(state.roleTimer);
         btnNextPlayer.disabled = false;
         btnNextPlayer.textContent = `I understood my role`;
       }
@@ -1378,11 +1387,13 @@
   }
 
   function hideRole() {
+    clearInterval(state.roleTimer);
     roleDisplay.classList.add('hidden');
     btnShowRole.classList.remove('hidden');
     btnHideRole.classList.add('hidden');
     btnNextPlayer.classList.add('hidden');
     btnNextPlayer.disabled = true;
+    btnNextPlayer.textContent = `I understood my role`;
   }
 
   function nextPlayer() {
