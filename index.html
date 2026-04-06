@@ -81,6 +81,7 @@
     .ladyResult { margin-top: 12px; padding: 14px; border-radius: 14px; text-align: center; font-weight: 800; letter-spacing: .3px; }
     .ladyResult.good { background: rgba(157,227,177,0.18); border: 1px solid rgba(157,227,177,0.55); color: #d8ffe7; }
     .ladyResult.evil { background: rgba(244,183,183,0.18); border: 1px solid rgba(244,183,183,0.55); color: #ffe3e3; }
+    #settingsOverlay:not(.hidden) { display:flex; }
 
   </style>
 </head>
@@ -88,7 +89,21 @@
 <div class="wrap">
   <div class="topBar">
     <h1>Avalon</h1>
-    <button class="linkbtn" id="btnResetAll" title="Reset everything">Reset</button>
+    <div style="display:flex; gap:12px; align-items:center;">
+      <button class="linkbtn" id="btnSettings">Settings</button>
+      <button class="linkbtn" id="btnResetAll" title="Reset everything">Reset</button>
+    </div>
+  </div>
+
+  <!-- Settings modal -->
+  <div id="settingsOverlay" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100;align-items:center;justify-content:center;">
+    <div style="background:#0f1b33;border-radius:18px;padding:24px;width:90%;max-width:360px;border:1px solid rgba(255,255,255,0.08);">
+      <h2 style="margin:0 0 16px;">Settings</h2>
+      <div class="checkbox"><input id="timerEnabled" type="checkbox" checked><label for="timerEnabled" style="margin:0;">15-second role reveal timer</label></div>
+      <div style="margin-top:20px; text-align:right;">
+        <button id="btnCloseSettings" class="secondary" style="padding:10px 20px;">Done</button>
+      </div>
+    </div>
   </div>
   <!-- <div class="muted">Pass-the-phone role reveal + 5 quest tracker.</div> -->
 
@@ -1279,6 +1294,7 @@
     setupCard.classList.remove('hidden');
     revealCard.classList.add('hidden');
     gameCard.classList.add('hidden');
+    document.getElementById('btnSettings').classList.remove('hidden');
 
     roleDisplay.classList.add('hidden');
     btnShowRole.classList.remove('hidden');
@@ -1340,6 +1356,7 @@
     setupCard.classList.add('hidden');
     revealCard.classList.remove('hidden');
     gameCard.classList.add('hidden');
+    document.getElementById('btnSettings').classList.add('hidden');
 
     state.revealIndex = 0;
     showRevealStep();
@@ -1370,6 +1387,12 @@
     btnShowRole.classList.add('hidden');
     btnHideRole.classList.remove('hidden');
     btnNextPlayer.classList.remove('hidden');
+    const timerEnabled = document.getElementById('timerEnabled').checked;
+    if (!timerEnabled) {
+      btnNextPlayer.disabled = false;
+      btnNextPlayer.textContent = `I understood my role`;
+      return;
+    }
     btnNextPlayer.disabled = true;
     let remaining = 15;
     btnNextPlayer.textContent = `I understood my role (${remaining}s)`;
@@ -1463,6 +1486,17 @@
   btnStart.addEventListener('click', startGame);
   btnResetAll.addEventListener('click', () => {
     if (confirm('Reset everything and start over?')) resetAll();
+  });
+
+  document.getElementById('btnSettings').addEventListener('click', () => {
+    document.getElementById('settingsOverlay').classList.remove('hidden');
+  });
+  document.getElementById('btnCloseSettings').addEventListener('click', () => {
+    document.getElementById('settingsOverlay').classList.add('hidden');
+  });
+  document.getElementById('settingsOverlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('settingsOverlay'))
+      document.getElementById('settingsOverlay').classList.add('hidden');
   });
 
   btnShowRole.addEventListener('click', showRole);
